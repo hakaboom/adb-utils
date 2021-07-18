@@ -57,40 +57,53 @@ class ADBClient(object):
         if version:
             return int(version[0])
 
-    def start_server(self):
+    def start_server(self) -> None:
         """
-        command 'adb start-server'
-        :return: None
+        command 'adb start_server'
+        Returns:
+
         """
         self.cmd('start-server', devices=False)
 
-    def kill_server(self):
+    def kill_server(self) -> None:
         """
-        command 'adb kill-server'
-        :return: None
+        command 'adb kill_server'
+        Returns:
+
         """
         self.cmd('kill-server', devices=False)
 
-    def connect(self, force: Optional[bool] = False):
+    def connect(self, force: Optional[bool] = False) -> None:
         """
-        command adb connect
-        :param force: 不判断设备当前状态,强制连接
-        :return: None
+        command 'adb connect <device_id>'
+        Args:
+            force: 不判断设备当前状态,强制连接
+
+        Returns:
+                None
         """
         if self.device_id and ':' in self.device_id and (force or self.status != 'devices'):
             connect_result = self.cmd("connect %s" % self.device_id, devices=False)
             # TODO: 判断设备是否连接上
 
-    def disconnect(self):
+    def disconnect(self) -> None:
         """
-        command adb disconnect
-        :return: None
+        command 'adb -s <device_id> disconnect'
+        Returns:
+            None
         """
         if ':' in self.device_id:
             self.cmd(f"disconnect {self.device_id}", devices=False)
 
+    def get_forwards(self) -> list:
+        """
+        command 'adb forward --list'
+        Returns:
+
+        """
+
     @property
-    def status(self):
+    def status(self) -> Union[None, str]:
         """
         command adb -s <device_id> get-state,返回当前设备状态
         :return:
