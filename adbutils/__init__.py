@@ -49,7 +49,7 @@ class ADBClient(object):
     def server_version(self) -> int:
         """
         获得cmd version
-        :return:
+        :return: adb server版本
         """
         ret = self.cmd('version', devices=False)
         pattern = re.compile('Android Debug Bridge version \d.\d.(\d+)\n')
@@ -57,25 +57,40 @@ class ADBClient(object):
         if version:
             return int(version[0])
 
+    @property
+    def devices(self) -> dict:
+        """
+        command 'adb devices'
+
+        Returns:
+            devices dict key[device_name]-value[device_state]
+        """
+        pattern = re.compile('([\S]+)\t([\w]+)\n?')
+        ret = self.cmd("devices", devices=False)
+        return {value[0]: value[1] for value in pattern.findall(ret)}
+
     def start_server(self) -> None:
         """
         command 'adb start_server'
-        Returns:
 
+        Returns:
+            None
         """
         self.cmd('start-server', devices=False)
 
     def kill_server(self) -> None:
         """
         command 'adb kill_server'
-        Returns:
 
+        Returns:
+            None
         """
         self.cmd('kill-server', devices=False)
 
     def connect(self, force: Optional[bool] = False) -> None:
         """
         command 'adb connect <device_id>'
+
         Args:
             force: 不判断设备当前状态,强制连接
 
@@ -89,24 +104,84 @@ class ADBClient(object):
     def disconnect(self) -> None:
         """
         command 'adb -s <device_id> disconnect'
+
         Returns:
             None
         """
         if ':' in self.device_id:
             self.cmd(f"disconnect {self.device_id}", devices=False)
 
-    def get_forwards(self) -> list:
+    def forward(self, local: str, remote: str, no_rebind: Optional[bool] = True) -> None:
+        """
+        command adb forward
+
+        Args:
+            local:  要转发的本地端口
+            remote: 要与local绑定的设备端口
+            no_rebind: if True,如果local端已经绑定则失败
+
+        Returns:
+            None
+        """
+        cmds = ['forward']
+        if no_rebind:
+            cmds += ['--no-rebind']
+        self.cmd(cmds + [local, remote])
+
+    def remove_forward(self, local: Optional[str] = None) -> None:
+        """
+        command adb forward --remove <local>
+        Args:
+            local: 本地端口。如果未指定local,则默认清除所有连接' adb forward --remove-all'
+
+        Returns:
+            None
+        """
+        if local:
+            cmds = ['forward', '--remove', local]
+        else:
+            cmds = ['forawrd', '--remove-all']
+        self.cmd(cmds)
+
+    def get_forwards(self, device_id: str = None) -> dict:
         """
         command 'adb forward --list'
+
+        Args:
+            device_id (str): 获取指定设备下的端口
+        Returns:
+            forwards dict key[device_name]-value[Tuple[local, remote]]
+        """
+        forwards = {}
+        pattern = re.compile('([\S]+)\s([\S]+)\s([\S]+)\n?')
+        ret = self.cmd(['forward', '--list'], devices=False, skip_error=True)
+        for value in pattern.findall(ret):
+            if device_id and device_id != value[0]:
+                continue
+            if value[0] in forwards:
+                forwards[value[0]] += [(value[1], value[2])]
+            else:
+                forwards[value[0]] = [(value[1], value[2])]
+        return forwards
+
+    def get_forward_port(self, remote: str):
+        """
+        # TODO: 准备写
+        Args:
+            remote:
+
         Returns:
 
         """
+
 
     @property
     def status(self) -> Union[None, str]:
         """
         command adb -s <device_id> get-state,返回当前设备状态
-        :return:
+
+        Returns:
+            当前设备状态
         """
         proc = self.start_cmd('get-state')
         stdout, stderr = proc.communicate()
@@ -161,7 +236,7 @@ class ADBClient(object):
         """
         创建一个Popen
         :param cmds: cmd commands
-        :param devices:
+        :param devices: 如果为True,则需要指定device-id,命令中会传入-s
         :return: Popen
         """
         cmds = split_cmd(cmds)
