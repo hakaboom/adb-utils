@@ -206,6 +206,81 @@ class ADBClient(object):
             return port
         return self.get_available_forward_local()
 
+    def push(self, local: str, remote: str) -> None:
+        """
+        command 'adb push <local> <remote>'
+
+        Args:
+            local: 发送文件的路径
+            remote: 发送到设备上的路径
+
+        Returns:
+            None
+        """
+        # TODO:判断<local>文件是否存在
+        self.cmd(['push', local, remote], decode=False)
+
+    def pull(self, local: str, remote: str) -> None:
+        """
+        command 'adb pull <remote> <local>
+
+        Args:
+            local: 本地的路径
+            remote: 设备上的路径
+
+        Returns:
+            None
+        """
+        self.cmd(['pull', remote, local], decode=False)
+
+    def install(self, local: str, install_options: Union[str, list, None] = None) -> None:
+        """
+        command 'adb install <local>'
+
+        Args:
+            local: apk文件路径
+            install_options: 可指定参数
+                    "-r",  # 重新安装现有应用，并保留其数据。
+                    "-t",  # 允许安装测试 APK。
+                    "-g",  # 授予应用清单中列出的所有权限。
+                    "-d",  # 允许APK降级覆盖安装
+                    "-l",  # 将应用安装到保护目录/mnt/asec
+                    "-s",  # 将应用安装到sdcard
+
+        Returns:
+            None
+        """
+        cmds = ['install']
+        if isinstance(install_options, str):
+            cmds.append(install_options)
+        elif isinstance(install_options, list):
+            cmds = cmds + install_options
+
+        cmds = cmds + [local]
+        out = self.cmd(cmds)
+        # TODO: 增加安装应用是否成功的判断
+        # if re.search(r"Failure \[.*?\]", out):
+        #     raise AdbError("Installation Failure\n%s" % out)
+
+    def uninstall(self, package_name: str, install_options: Optional[str] = None) -> None:
+        """
+        command 'adb uninstall <package>
+
+        Args:
+            package_name: 需要卸载的包名
+            install_options: 可指定参数
+                            "-k",  # 移除软件包后保留数据和缓存目录。
+
+        Returns:
+            None
+        """
+        cmds = ['uninstall']
+        if install_options and isinstance(install_options, str):
+            cmds.append(install_options)
+
+        cmds = cmds + [package_name]
+        self.cmd(cmds)
+
     @property
     def status(self) -> Union[None, str]:
         """
