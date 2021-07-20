@@ -1,5 +1,7 @@
+import random
 import subprocess
 import re
+import socket
 
 from adbutils._utils import get_adb_exe, split_cmd, _popen_kwargs, get_std_encoding
 from adbutils.constant import ANDROID_ADB_SERVER_HOST, ANDROID_ADB_SERVER_PORT
@@ -143,7 +145,7 @@ class ADBClient(object):
             cmds = ['forawrd', '--remove-all']
         self.cmd(cmds)
 
-    def get_forwards(self, device_id: str = None) -> dict:
+    def get_forwards(self, device_id: Optional[str] = None) -> dict:
         """
         command 'adb forward --list'
 
@@ -164,16 +166,45 @@ class ADBClient(object):
                 forwards[value[0]] = [(value[1], value[2])]
         return forwards
 
-    def get_forward_port(self, remote: str):
+    def get_forward_port(self, remote: str, device_id: Optional[str] = None) -> Union[None, int]:
         """
-        # TODO: 准备写
+        获取开放端口的端口号
         Args:
-            remote:
-
+            remote (str): 设备端口
+            device_id (str): 获取指定设备下的端口
         Returns:
-
+            本地端口号
         """
+        forwards = self.get_forwards(device_id=device_id)
+        for device_id, value in forwards.items():
+            if isinstance(value, (list, tuple)):
+                for _local, _remote in value:
+                    if _remote == remote:
+                        #  解析local
+                        pattern = re.compile('tcp:(\d+)')
+                        ret = pattern.findall(_local)
+                        if ret:
+                            return int(ret[0])
+        return None
 
+    def get_available_forward_local(self) -> int:
+        """
+        随机获取一个可用的端口号
+        Returns:
+            可用端口(int)
+        """
+        sock = socket.socket()
+        port = random.randint(11111, 20000)
+        result = False
+        try:
+            sock.bind((self.host, port))
+            result = True
+        except socket.error:
+            pass
+        sock.close()
+        if result:
+            return port
+        return self.get_available_forward_local()
 
     @property
     def status(self) -> Union[None, str]:
