@@ -100,7 +100,7 @@ class ADBClient(object):
                 None
         """
         if self.device_id and ':' in self.device_id and (force or self.status != 'devices'):
-            connect_result = self.cmd("connect %s" % self.device_id, devices=False)
+            ret = self.cmd("connect %s" % self.device_id, devices=False)
             # TODO: 判断设备是否连接上
 
     def disconnect(self) -> None:
@@ -257,7 +257,7 @@ class ADBClient(object):
             cmds = cmds + install_options
 
         cmds = cmds + [local]
-        out = self.cmd(cmds)
+        ret = self.cmd(cmds)
         # TODO: 增加安装应用是否成功的判断
         # if re.search(r"Failure \[.*?\]", out):
         #     raise AdbError("Installation Failure\n%s" % out)
@@ -308,7 +308,7 @@ class ADBClient(object):
         创建cmd命令, 并返回命令返回值
 
         Args:
-            cmds: 需要运行的参数,可以是list,str
+            cmds (list,str): 需要运行的参数
             devices (bool): 如果为True,则需要指定device-id,命令中会传入-s
             decode (bool): 是否解码stdout,stderr
             timeout (int): 设置命令超时时间
@@ -362,3 +362,80 @@ class ADBClient(object):
             creationflags=self.SUBPROCESS_FLAG
         )
         return proc
+
+
+class ADBShell(ADBClient):
+    SHELL_ENCODING = 'utf-8'  # adb shell的编码
+
+    @property
+    def sdk_version(self) -> int:
+        """
+        获取sdk版本
+
+        Returns:
+            sdk版本号
+        """
+        if not hasattr(self, '_sdk_version'):
+            sdk = self.getprop('ro.build.version.sdk')
+            if not sdk:
+                raise  # TODO
+            setattr(self, '_sdk_version', int(sdk))
+            return self.sdk_version  # TODO: 获取不到会不会存在死循环?
+        else:
+            return getattr(self, '_sdk_version')
+
+    @property
+    def abi_version(self) -> str:
+        """
+        获取abi版本
+
+        Returns:
+            abi版本
+        """
+        if not hasattr(self, '_abi_version'):
+            adi = self.getprop('ro.product.cpu.abi')
+            if not adi:
+                raise  # TODO
+            setattr(self, '_abi_version', adi)
+            return self.abi_version
+        else:
+            return getattr(self, '_abi_version')
+
+    def getprop(self, key: str, strip: Optional[bool] = True) -> str:
+        """
+        command 'adb shell getprop <key>
+
+        Args:
+            key: 需要查询的参数
+            strip: 删除文本头尾空格
+
+        Returns:
+            getprop获取到的参数
+        """
+        ret = self.raw_shell(['getprop', key])
+        return strip and ret.rstrip() or ret
+
+    def shell(self, cmds: Union[list, str], decode: Optional[bool] = True, skip_error: Optional[bool] = False):
+        """
+        command 'adb shell
+
+        Args:
+            cmds (list,str): 需要运行的参数
+            decode (bool): 是否解码stdout,stderr
+            skip_error (bool): 是否跳过报错
+
+        Returns:
+
+        """
+        # TODO:
+
+    def raw_shell(self, cmds: Union[list, str], decode: Optional[bool] = True, skip_error: Optional[bool] = False):
+        cmds = ['shell'] + split_cmd(cmds)
+        stdout = self.cmd(cmds, decode=False, skip_error=skip_error)
+        if not decode:
+            return stdout
+
+        try:
+            return stdout.decode(self.SHELL_ENCODING)
+        except UnicodeDecodeError:
+            return str(repr(stdout))

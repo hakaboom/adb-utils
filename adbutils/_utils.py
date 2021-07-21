@@ -1,8 +1,10 @@
 import platform
 import sys
 import os
+import queue
+import threading
 import subprocess
-
+from typing import IO, Optional, Union
 from adbutils.constant import DEFAULT_ADB_PATH
 
 
@@ -66,3 +68,61 @@ def get_adb_exe():
             raise RuntimeError(f"No adb executable supports this platform({system}-{machine}).")
 
     return adb_path
+
+
+class NonBlockingStreamReader(object):
+    # TODO: 增加一个方法用于非阻塞状态将stream输出存入文件
+    def __init__(self, stream: IO, raise_EOF: Optional[bool] = False):
+        self._s = stream
+        self._q = queue.Queue()
+
+        def _populateQueue(_stream: IO, _queue: queue.Queue, kill_event: threading.Event):
+            """
+            Collect lines from 'stream' and put them in 'queue'
+
+            Args:
+                _stream: 文件流
+                _queue: 队列
+                kill_event: 一个事件管理标志
+
+            Returns:
+                None
+            """
+            while not kill_event.is_set():
+                line = _stream.readline()
+                if line is not None:
+                    _queue.put(line)
+                    # TODO: kill thread
+                elif kill_event.is_set():
+                    break
+                elif raise_EOF:
+                    raise UnexpectedEndOfStream
+                else:
+                    break
+
+        self._kill_event = threading.Event()
+        self._t = threading.Thread(target=_populateQueue, args=(self._s, self._q, self._kill_event))
+        self._t.daemon = True
+        self._t.start()  # start collecting lines from the stream
+
+    def readline(self, timeout: Union[int] = None):
+        try:
+            return self._q.get(block=timeout is not None, timeout=timeout)
+        except queue.Empty:
+            return None
+
+    def read(self) -> bytes:
+        lines = []
+        while True:
+            line = self.readline()
+            if line is None:
+                break
+            lines.append(line)
+        return b"".join(lines)
+
+    def kill(self) -> None:
+        self._kill_event.set()
+
+
+class UnexpectedEndOfStream(Exception):
+    pass

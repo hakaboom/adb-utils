@@ -1,7 +1,6 @@
 import adbutils
-from adbutils._utils import split_cmd
-import re
-
-adb = adbutils.ADBClient(device_id='emulator-5554')
-adb.install(local='C:\\Users\\Administrator.hzq\\Downloads\\com.tencent.qnet.2.3.1_rel.apk',
-            install_options=['-r'])
+from adbutils._utils import split_cmd, get_std_encoding, NonBlockingStreamReader
+import subprocess
+adb = adbutils.ADBShell(device_id='emulator-5554')
+print(adb.sdk_version)
+print(adb.abi_version)
