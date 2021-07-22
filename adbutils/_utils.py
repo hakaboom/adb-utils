@@ -45,7 +45,7 @@ def _popen_kwargs():
     }
 
 
-def get_adb_exe():
+def get_adb_exe() -> str:
     """
     获取adb路径
     :return:

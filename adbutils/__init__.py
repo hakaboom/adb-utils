@@ -5,7 +5,7 @@ import socket
 
 from adbutils._utils import get_adb_exe, split_cmd, _popen_kwargs, get_std_encoding
 from adbutils.constant import ANDROID_ADB_SERVER_HOST, ANDROID_ADB_SERVER_PORT
-from typing import Union, List, Optional, Tuple
+from typing import Union, List, Optional, Tuple, Dict, Any
 
 
 class ADBClient(object):
@@ -26,11 +26,11 @@ class ADBClient(object):
         self._set_cmd_options(host, port)
 
     @property
-    def host(self):
+    def host(self) -> str:
         return self.__host
 
     @property
-    def port(self):
+    def port(self) -> int:
         return self.__port
 
     def _set_cmd_options(self, host: str, port: int):
@@ -60,7 +60,7 @@ class ADBClient(object):
             return int(version[0])
 
     @property
-    def devices(self) -> dict:
+    def devices(self) -> Dict[str, str]:
         """
         command 'adb devices'
 
@@ -145,7 +145,7 @@ class ADBClient(object):
             cmds = ['forawrd', '--remove-all']
         self.cmd(cmds)
 
-    def get_forwards(self, device_id: Optional[str] = None) -> dict:
+    def get_forwards(self, device_id: Optional[str] = None) -> Dict[str, List[Tuple[str, str]]]:
         """
         command 'adb forward --list'
 
@@ -166,7 +166,7 @@ class ADBClient(object):
                 forwards[value[0]] = [(value[1], value[2])]
         return forwards
 
-    def get_forward_port(self, remote: str, device_id: Optional[str] = None) -> Union[None, int]:
+    def get_forward_port(self, remote: str, device_id: Optional[str] = None) -> Optional[int]:
         """
         获取开放端口的端口号
         Args:
@@ -282,7 +282,7 @@ class ADBClient(object):
         self.cmd(cmds)
 
     @property
-    def status(self) -> Union[None, str]:
+    def status(self) -> Optional[str]:
         """
         command adb -s <device_id> get-state,返回当前设备状态
 
@@ -377,10 +377,8 @@ class ADBShell(ADBClient):
         """
         if not hasattr(self, '_sdk_version'):
             sdk = self.getprop('ro.build.version.sdk')
-            if not sdk:
-                raise  # TODO
             setattr(self, '_sdk_version', int(sdk))
-            return self.sdk_version  # TODO: 获取不到会不会存在死循环?
+            return self.sdk_version
         else:
             return getattr(self, '_sdk_version')
 
@@ -394,12 +392,40 @@ class ADBShell(ADBClient):
         """
         if not hasattr(self, '_abi_version'):
             adi = self.getprop('ro.product.cpu.abi')
-            if not adi:
-                raise  # TODO
             setattr(self, '_abi_version', adi)
             return self.abi_version
         else:
             return getattr(self, '_abi_version')
+
+    @property
+    def displayInfo(self) -> Dict[str, Union[int, float]]:
+        """
+        获取屏幕数据
+
+        Returns:
+            width/height/density/orientation/rotation/max_x/max_y
+        """
+        display_info = self.getPhysicalDisplayInfo()
+        orientation = self.orientation
+        max_x, max_y = self.getMaxXY()
+        display_info.update({
+            "orientation": orientation,
+            "rotation": orientation * 90,
+            "max_x": max_x,
+            "max_y": max_y,
+        })
+        return display_info
+
+    @property
+    def orientation(self) -> int:
+        """
+        获取屏幕方向
+
+        Returns:
+            屏幕方向 0/1/2
+        """
+        orientation = self.getDisplayOrientation()
+        return orientation
 
     def check_file(self, path: str, name: str) -> bool:
         """
@@ -430,7 +456,109 @@ class ADBShell(ADBClient):
                     max_y = int(ret[0])
         return max_x, max_y
 
-    def getprop(self, key: str, strip: Optional[bool] = True) -> str:
+    def getPhysicalDisplayInfo(self) -> Dict[str, Union[int, float]]:
+        """
+        Get value for display dimension and density from `mPhysicalDisplayInfo` value obtained from `dumpsys` command.
+
+        Returns:
+            physical display info for dimension and density
+
+        """
+        phyDispRE = re.compile(
+            '.*PhysicalDisplayInfo{(?P<width>\d+) x (?P<height>\d+), .*, density (?P<density>[\d.]+).*')
+        ret = self.raw_shell('dumpsys display')
+        m = phyDispRE.search(ret)
+        if m:
+            displayInfo = {}
+            for prop in ['width', 'height']:
+                displayInfo[prop] = int(m.group(prop))
+            for prop in ['density']:
+                # In mPhysicalDisplayInfo density is already a factor, no need to calculate
+                displayInfo[prop] = float(m.group(prop))
+            return displayInfo
+
+        # This could also be mSystem or mOverscanScreen
+        phyDispRE = re.compile('\s*mUnrestrictedScreen=\((?P<x>\d+),(?P<y>\d+)\) (?P<width>\d+)x(?P<height>\d+)')
+        # This is known to work on older versions (i.e. API 10) where mrestrictedScreen is not available
+        dispWHRE = re.compile('\s*DisplayWidth=(?P<width>\d+) *DisplayHeight=(?P<height>\d+)')
+        ret = self.raw_shell('dumpsys window')
+        m = phyDispRE.search(ret, 0)
+        if not m:
+            m = dispWHRE.search(ret, 0)
+        if m:
+            displayInfo = {}
+            for prop in ['width', 'height']:
+                displayInfo[prop] = int(m.group(prop))
+            for prop in ['density']:
+                d = self._getDisplayDensity(strip=True)
+                if d:
+                    displayInfo[prop] = d
+                else:
+                    # No available density information
+                    displayInfo[prop] = -1.0
+            return displayInfo
+
+        # gets C{mPhysicalDisplayInfo} values from dumpsys. This is a method to obtain display dimensions and density
+        phyDispRE = re.compile('Physical size: (?P<width>\d+)x(?P<height>\d+).*Physical density: (?P<density>\d+)',
+                               re.S)
+        ret = self.raw_shell('wm size; wm density')
+        m = phyDispRE.search(ret)
+        if m:
+            displayInfo = {}
+            for prop in ['width', 'height']:
+                displayInfo[prop] = int(m.group(prop))
+            for prop in ['density']:
+                displayInfo[prop] = float(m.group(prop))
+            return displayInfo
+
+        return {}
+
+    def _getDisplayDensity(self, strip=True):
+        """
+        Get display density
+
+        Args:
+            strip: strip the output
+        Returns:
+            display density
+        """
+        BASE_DPI = 160.0
+        density = self.getprop('ro.sf.lcd_density', strip)
+        if density:
+            return float(density) / BASE_DPI
+        density = self.getprop('qemu.sf.lcd_density', strip)
+        if density:
+            return float(density) / BASE_DPI
+        return -1.0
+
+    def getDisplayOrientation(self) -> int:
+        """
+        Another way to get the display orientation, this works well for older devices (SDK version 15)
+
+        Returns:
+            display orientation information
+
+        """
+        # another way to get orientation, for old sumsung device(sdk version 15) from xiaoma
+        SurfaceFlingerRE = re.compile('orientation=(\d+)')
+        ret = self.shell('dumpsys SurfaceFlinger')
+        m = SurfaceFlingerRE.search(ret)
+        if m:
+            return int(m.group(1))
+
+        # Fallback method to obtain the orientation
+        # See https://github.com/dtmilano/AndroidViewClient/issues/128
+        surfaceOrientationRE = re.compile('SurfaceOrientation:\s+(\d+)')
+        ret = self.shell('dumpsys input')
+        m = surfaceOrientationRE.search(ret)
+        if m:
+            return int(m.group(1))
+
+        # We couldn't obtain the orientation
+        # TODO: warnings.warn("Could not obtain the orientation, return 0")
+        return 0
+    
+    def getprop(self, key: str, strip: Optional[bool] = True) -> Optional[str]:
         """
         command 'adb shell getprop <key>
 
@@ -443,6 +571,53 @@ class ADBShell(ADBClient):
         """
         ret = self.raw_shell(['getprop', key])
         return strip and ret.rstrip() or ret
+
+    def app_install_path(self, packageName: str) -> Optional[str]:
+        """
+        command 'adb shell pm path <package>'
+
+        Args:
+            packageName: 需要查找的包名
+
+        Returns:
+            包安装路径
+        """
+        packages = self.app_list()
+        if packageName in packages:
+            stdout = self.shell(['pm', 'path', packageName])
+            if 'package:' in stdout:
+                return stdout.split('package:')[1].strip()
+        else:
+            return None
+
+    def app_list(self, flag_options: Union[str, list, None] = None) -> list:
+        """
+        command 'adb shell pm list packages'
+
+        Args:
+            flag_options: 可指定参数
+                    "-f",  # 查看它们的关联文件。
+                    "-d",  # 进行过滤以仅显示已停用的软件包。
+                    "-e",  # 进行过滤以仅显示已启用的软件包。
+                    "-s",  # 进行过滤以仅显示系统软件包。
+                    "-3",  # 进行过滤以仅显示第三方软件包。
+                    "-i",  # 查看软件包的安装程序。
+                    "-u",  # 也包括已卸载的软件包。
+                    "--user user_id",  # 要查询的用户空间。
+
+        Returns:
+
+        """
+        cmds = ['cmd', 'package', 'list', 'packages']
+        if isinstance(flag_options, str):
+            cmds.append(flag_options)
+        elif isinstance(flag_options, list):
+            cmds = cmds + flag_options
+        ret = self.shell(cmds)
+        packages = ret.splitlines()
+        # remove all empty string; "package:xxx" -> "xxx"
+        packages = [p.split(":")[1] for p in packages if p]
+        return packages
 
     def shell(self, cmds: Union[list, str], decode: Optional[bool] = True, skip_error: Optional[bool] = False) -> str:
         """
