@@ -5,7 +5,7 @@ import socket
 
 from adbutils._utils import get_adb_exe, split_cmd, _popen_kwargs, get_std_encoding
 from adbutils.constant import ANDROID_ADB_SERVER_HOST, ANDROID_ADB_SERVER_PORT
-from typing import Union, List, Optional
+from typing import Union, List, Optional, Tuple
 
 
 class ADBClient(object):
@@ -401,6 +401,35 @@ class ADBShell(ADBClient):
         else:
             return getattr(self, '_abi_version')
 
+    def check_file(self, path: str, name: str) -> bool:
+        """
+        command 'adb shell find <name> in the <path>'
+
+        Args:
+            path: 在设备上的路径
+            name: 需要检索的文件名
+
+        Returns:
+            bool 是否找到文件
+        """
+        return bool(self.raw_shell(['find', path, '-name', name]))
+
+    def getMaxXY(self) -> Tuple[int, int]:
+        ret = self.shell(['getevent', '-p']).split('\n')
+        max_x, max_y = None, None
+        pattern = re.compile(r'max ([0-9]+)')
+        for i in ret:
+            if i.find('0035') != -1:
+                ret = pattern.findall(i)
+                if ret:
+                    max_x = int(ret[0])
+
+            if i.find('0036') != -1:
+                ret = pattern.findall(i)
+                if ret:
+                    max_y = int(ret[0])
+        return max_x, max_y
+
     def getprop(self, key: str, strip: Optional[bool] = True) -> str:
         """
         command 'adb shell getprop <key>
@@ -415,7 +444,7 @@ class ADBShell(ADBClient):
         ret = self.raw_shell(['getprop', key])
         return strip and ret.rstrip() or ret
 
-    def shell(self, cmds: Union[list, str], decode: Optional[bool] = True, skip_error: Optional[bool] = False):
+    def shell(self, cmds: Union[list, str], decode: Optional[bool] = True, skip_error: Optional[bool] = False) -> str:
         """
         command 'adb shell
 
@@ -427,9 +456,33 @@ class ADBShell(ADBClient):
         Returns:
 
         """
-        # TODO:
+        if self.sdk_version < 25:
+            # sdk_version < 25, adb shell 不返回错误
+            # https://issuetracker.google.com/issues/36908392
+            cmds = split_cmd(cmds) + [';', 'echo', '---$?---']
+            ret = self.raw_shell(cmds, decode=decode).rstrip()
+            m = re.match("(.*)---(\d+)---$", ret, re.DOTALL)
+            if not m:
+                # TODO: warnings.warn('return code not matched)
+                stdout = ret
+                returncode = 0
+            else:
+                stdout = m.group(1)
+                returncode = int(m.group(2))
 
-    def raw_shell(self, cmds: Union[list, str], decode: Optional[bool] = True, skip_error: Optional[bool] = False):
+            if returncode > 0:
+                if not skip_error:
+                    raise  # TODO: 增加对应raise
+            return stdout
+        else:
+            try:
+                ret = self.raw_shell(cmds, decode=decode, skip_error=skip_error)
+            except Exception:  # TODO: AdbError
+                pass
+            else:
+                return ret
+
+    def raw_shell(self, cmds: Union[list, str], decode: Optional[bool] = True, skip_error: Optional[bool] = False) -> str:
         cmds = ['shell'] + split_cmd(cmds)
         stdout = self.cmd(cmds, decode=False, skip_error=skip_error)
         if not decode:
