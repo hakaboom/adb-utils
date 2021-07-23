@@ -9,8 +9,10 @@ import cv2
 import numpy as np
 from baseImage import Rect, IMAGE
 
-from adbutils._utils import get_adb_exe, split_cmd, _popen_kwargs, get_std_encoding, print_run_time
-from adbutils.constant import (ANDROID_ADB_SERVER_HOST, ANDROID_ADB_SERVER_PORT, ADB_CAP_LOCAL_PATH)
+from adbutils._utils import (get_adb_exe, split_cmd, _popen_kwargs, get_std_encoding, print_run_time, check_file)
+from adbutils.constant import (ANDROID_ADB_SERVER_HOST, ANDROID_ADB_SERVER_PORT, ADB_CAP_REMOTE_PATH,
+                               ADB_CAP_LOCAL_PATH)
+from adbutils.exceptions import (AdbError, AdbShellError, AdbTimeout, NoDeviceSpecifyError)
 from typing import Union, List, Optional, Tuple, Dict, Any
 
 
@@ -76,6 +78,9 @@ class ADBClient(object):
         pattern = re.compile('([\S]+)\t([\w]+)\n?')
         ret = self.cmd("devices", devices=False)
         return {value[0]: value[1] for value in pattern.findall(ret)}
+
+    def get_device_id(self, decode: bool = False) -> str:
+        return decode and self.device_id.replace(':', '_') or self.device_id
 
     def start_server(self) -> None:
         """
@@ -220,10 +225,14 @@ class ADBClient(object):
             local: 发送文件的路径
             remote: 发送到设备上的路径
 
+        Raises:
+            RuntimeError:文件不存在
+
         Returns:
             None
         """
-        # TODO:判断<local>文件是否存在
+        if not check_file(local):
+            raise RuntimeError(f"file: {local} does not exists")
         self.cmd(['push', local, remote], decode=False)
 
     def pull(self, local: str, remote: str) -> None:
@@ -237,7 +246,8 @@ class ADBClient(object):
         Returns:
             None
         """
-        self.cmd(['pull', local, remote], decode=False)
+        # TODO:判断文件是否存在于设备中
+        self.cmd(['pull', remote, local], decode=False)
 
     def install(self, local: str, install_options: Union[str, list, None] = None) -> None:
         """
@@ -306,7 +316,7 @@ class ADBClient(object):
         elif "not found" in stderr:
             return None
         else:
-            raise  # TODO:AdbError(stdout, stderr, ['get-state'])
+            raise AdbError(stdout, stderr)
     
     def cmd(self, cmds: Union[list, str], devices: Optional[bool] = True, decode: Optional[bool] = True,
             timeout: Optional[int] = None, skip_error: Optional[bool] = False):
@@ -319,7 +329,8 @@ class ADBClient(object):
             decode (bool): 是否解码stdout,stderr
             timeout (int): 设置命令超时时间
             skip_error (bool): 是否跳过报错
-
+        Raises:
+            AdbTimeout:输入命令超时
         Returns:
             返回命令结果stdout
         """
@@ -330,7 +341,7 @@ class ADBClient(object):
             except subprocess.TimeoutExpired:
                 proc.kill()
                 stdout, stderr = proc.communicate()
-                # TODO: raise AdbTimeout
+                raise AdbTimeout(f"cmd command {' '.join(proc.args)} time out")
         else:
             stdout, stderr = proc.communicate()
 
@@ -340,22 +351,26 @@ class ADBClient(object):
 
         if proc.returncode > 0:
             if not skip_error:
-                print(cmds)
-                raise  # TODO: 增加对应raise
+                raise AdbError(stdout, stderr)
 
         return stdout
 
     def start_cmd(self, cmds: Union[list, str], devices: bool = True) -> subprocess.Popen:
         """
-        创建一个Popen
-        :param cmds: cmd commands
-        :param devices: 如果为True,则需要指定device-id,命令中会传入-s
-        :return: Popen
+        根据cmds创建一个Popen
+
+        Args:
+            cmds: cmd commands
+            devices: 如果为True,则需要指定device-id,命令中会传入-s
+        Raises:
+            NoDeviceSpecifyError:没有指定设备运行cmd命令
+        Returns:
+            Popen管道
         """
         cmds = split_cmd(cmds)
         if devices:
             if not self.device_id:
-                raise print('must set device_id')
+                raise NoDeviceSpecifyError('must set device_id')
             cmd_options = self.cmd_options + ['-s', self.device_id]
         else:
             cmd_options = self.cmd_options
@@ -654,9 +669,10 @@ class ADBShell(ADBClient):
             cmds (list,str): 需要运行的参数
             decode (bool): 是否解码stdout,stderr
             skip_error (bool): 是否跳过报错
-
+        Raises:
+            AdbShellError:指定shell命令时出错
         Returns:
-
+            命令返回结果
         """
         if self.sdk_version < 25:
             # sdk_version < 25, adb shell 不返回错误
@@ -674,17 +690,28 @@ class ADBShell(ADBClient):
 
             if returncode > 0:
                 if not skip_error:
-                    raise  # TODO: 增加对应raise
+                    raise AdbShellError(stdout, stderr=None)
             return stdout
         else:
             try:
                 ret = self.raw_shell(cmds, decode=decode, skip_error=skip_error)
-            except Exception:  # TODO: AdbError
-                pass
+            except AdbError as err:
+                raise AdbShellError(err.stdout, err.stderr)
             else:
                 return ret
 
-    def raw_shell(self, cmds: Union[list, str], decode: Optional[bool] = True, skip_error: Optional[bool] = False) -> str:
+    def raw_shell(self, cmds: Union[list, str], decode: Optional[bool] = True, skip_error: Optional[bool] = False) \
+            -> str:
+        """
+        command 'adb shell
+
+        Args:
+            cmds (list): 需要运行的参数
+            decode (bool): 是否解码stdout,stderr
+            skip_error (bool): 是否跳过报错
+        Returns:
+            命令返回结果
+        """
         cmds = ['shell'] + split_cmd(cmds)
         stdout = self.cmd(cmds, decode=False, skip_error=skip_error)
         if not decode:
@@ -697,44 +724,54 @@ class ADBShell(ADBClient):
 
 
 class ADBDevice(ADBShell):
-    @print_run_time()
-    def screenshot(self, rect: Union[Rect, Tuple[int]] = None):
+    def screenshot(self, rect: Union[Rect, Tuple[int, int, int, int], List[int]] = None) -> np.ndarray:
         """
         command 'adb screencap'
 
         Args:
-            rect: 自定义截取范围
+            rect: 自定义截取范围 Rect/(x, y, width, height)
 
+        Raises:
+                ValueError:传入参数rect错误
+                OverflowError:rect超出屏幕边界范围
         Returns:
-
+            图像数据
         """
-        # 速度慢
-        # raw = self.shell(['screencap', '-p'], decode=False)
-        # IMAGE(raw.replace(self.line_breaker, b"\n"))
+        remote_path = ADB_CAP_REMOTE_PATH
+        raw_local_path = ADB_CAP_LOCAL_PATH.format(device_id=self.get_device_id(True))
 
-        local_path = ADB_CAP_LOCAL_PATH
-        raw_remote_path = 'cap.raw'  # TODO: cap.raw更改到constant.py里
-
-        self.raw_shell(['screencap', local_path])
-        self.start_cmd(['chmod', '755', local_path])
-        self.pull(local=local_path, remote=raw_remote_path)
+        self.raw_shell(['screencap', remote_path])
+        self.start_cmd(['chmod', '755', remote_path])
+        self.pull(local=raw_local_path, remote=remote_path)
 
         # read size
-        img_data = np.fromfile(raw_remote_path, dtype=np.uint16)
+        img_data = np.fromfile(raw_local_path, dtype=np.uint16)
         width, height = img_data[2], img_data[0]
         # read raw
-        img_data = np.fromfile(raw_remote_path, dtype=np.uint8)
+        img_data = np.fromfile(raw_local_path, dtype=np.uint8)
         img_data = img_data[slice(12, len(img_data))]
+        # 范围截取
+        img_data = img_data.reshape(width, height, 4)
+        width, height = img_data.shape[1::-1]
         if rect:
-            if rect[0] > height or rect[1] > width or rect[0] + rect[2] > height or rect[1] + rect[3] > width:
-                raise OverflowError('Rect不能超出屏幕 {}'.format(rect))
-            index = rect[0] * 4 + rect[1] * height * 4  # 从图片左上角开始,y计算公式y*height*4,x计算公式x*4, 4表示4通道
-            end = (rect[0] + rect[2]) * 4 + (rect[1] + rect[3] - 1) * height * 4
-            img_data = img_data[index: end]
-            img_data = img_data.reshape(rect[3], rect[2], 4)
-        else:
-            img_data = img_data.reshape(width, height, 4)
+            if isinstance(rect, Rect):
+                pass
+            elif isinstance(rect, (tuple, list)):
+                try:
+                    rect = Rect(*rect)
+                except TypeError:
+                    raise ValueError('param "rect" takes 4 positional arguments <x,y,width,height>')
+            else:
+                raise ValueError('param "rect" must be <Rect>/tuple/list')
+
+            # 判断边界是否超出width,height
+            if not Rect(0, 0, width, height).contains(rect):
+                raise OverflowError(f'rect不能超出屏幕边界 {rect}')
+            x_min, y_min = int(rect.tl.x), int(rect.tl.y)
+            x_max, y_max = int(rect.br.x), int(rect.br.y)
+            img_data = img_data[y_min:y_max, x_min:x_max]
+
         img_data = img_data[:, :, ::-1][:, :, 1:4]  # imgData中rgbA转为Abgr,并截取bgr
         # 删除raw临时文件
-        os.remove(raw_remote_path)
+        os.remove(raw_local_path)
         return img_data

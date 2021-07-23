@@ -10,6 +10,11 @@ from typing import IO, Optional, Union
 from adbutils.constant import DEFAULT_ADB_PATH
 
 
+def check_file(fileName: str):
+    """check file in path"""
+    return os.path.isfile(f'{fileName}')
+
+
 def get_std_encoding(stream):
     """
     Get encoding of the stream
