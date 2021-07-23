@@ -2,9 +2,15 @@ import random
 import subprocess
 import re
 import socket
+import os
+import time
 
-from adbutils._utils import get_adb_exe, split_cmd, _popen_kwargs, get_std_encoding
-from adbutils.constant import ANDROID_ADB_SERVER_HOST, ANDROID_ADB_SERVER_PORT
+import cv2
+import numpy as np
+from baseImage import Rect, IMAGE
+
+from adbutils._utils import get_adb_exe, split_cmd, _popen_kwargs, get_std_encoding, print_run_time
+from adbutils.constant import (ANDROID_ADB_SERVER_HOST, ANDROID_ADB_SERVER_PORT, ADB_CAP_LOCAL_PATH)
 from typing import Union, List, Optional, Tuple, Dict, Any
 
 
@@ -231,7 +237,7 @@ class ADBClient(object):
         Returns:
             None
         """
-        self.cmd(['pull', remote, local], decode=False)
+        self.cmd(['pull', local, remote], decode=False)
 
     def install(self, local: str, install_options: Union[str, list, None] = None) -> None:
         """
@@ -334,6 +340,7 @@ class ADBClient(object):
 
         if proc.returncode > 0:
             if not skip_error:
+                print(cmds)
                 raise  # TODO: 增加对应raise
 
         return stdout
@@ -366,6 +373,25 @@ class ADBClient(object):
 
 class ADBShell(ADBClient):
     SHELL_ENCODING = 'utf-8'  # adb shell的编码
+
+    @property
+    def line_breaker(self):
+        """
+        Set carriage return and line break property for various platforms and SDK versions
+
+        Returns:
+            carriage return and line break string
+        """
+        if not hasattr(self, '_line_breaker'):
+            if self.sdk_version >= 24:
+                line_breaker = os.linesep
+            else:
+                line_breaker = '\r' + os.linesep
+            line_breaker = line_breaker.encode("ascii")
+            setattr(self, '_line_breaker', line_breaker)
+            return self.line_breaker
+        else:
+            return getattr(self, '_line_breaker')
 
     @property
     def sdk_version(self) -> int:
@@ -619,7 +645,8 @@ class ADBShell(ADBClient):
         packages = [p.split(":")[1] for p in packages if p]
         return packages
 
-    def shell(self, cmds: Union[list, str], decode: Optional[bool] = True, skip_error: Optional[bool] = False) -> str:
+    def shell(self, cmds: Union[list, str], decode: Optional[bool] = True, skip_error: Optional[bool] = False) \
+            -> Union[str, bytes]:
         """
         command 'adb shell
 
@@ -667,3 +694,47 @@ class ADBShell(ADBClient):
             return stdout.decode(self.SHELL_ENCODING)
         except UnicodeDecodeError:
             return str(repr(stdout))
+
+
+class ADBDevice(ADBShell):
+    @print_run_time()
+    def screenshot(self, rect: Union[Rect, Tuple[int]] = None):
+        """
+        command 'adb screencap'
+
+        Args:
+            rect: 自定义截取范围
+
+        Returns:
+
+        """
+        # 速度慢
+        # raw = self.shell(['screencap', '-p'], decode=False)
+        # IMAGE(raw.replace(self.line_breaker, b"\n"))
+
+        local_path = ADB_CAP_LOCAL_PATH
+        raw_remote_path = 'cap.raw'  # TODO: cap.raw更改到constant.py里
+
+        self.raw_shell(['screencap', local_path])
+        self.start_cmd(['chmod', '755', local_path])
+        self.pull(local=local_path, remote=raw_remote_path)
+
+        # read size
+        img_data = np.fromfile(raw_remote_path, dtype=np.uint16)
+        width, height = img_data[2], img_data[0]
+        # read raw
+        img_data = np.fromfile(raw_remote_path, dtype=np.uint8)
+        img_data = img_data[slice(12, len(img_data))]
+        if rect:
+            if rect[0] > height or rect[1] > width or rect[0] + rect[2] > height or rect[1] + rect[3] > width:
+                raise OverflowError('Rect不能超出屏幕 {}'.format(rect))
+            index = rect[0] * 4 + rect[1] * height * 4  # 从图片左上角开始,y计算公式y*height*4,x计算公式x*4, 4表示4通道
+            end = (rect[0] + rect[2]) * 4 + (rect[1] + rect[3] - 1) * height * 4
+            img_data = img_data[index: end]
+            img_data = img_data.reshape(rect[3], rect[2], 4)
+        else:
+            img_data = img_data.reshape(width, height, 4)
+        img_data = img_data[:, :, ::-1][:, :, 1:4]  # imgData中rgbA转为Abgr,并截取bgr
+        # 删除raw临时文件
+        os.remove(raw_remote_path)
+        return img_data

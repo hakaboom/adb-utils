@@ -12,3 +12,6 @@ DEFAULT_ADB_PATH = {
 }
 ANDROID_ADB_SERVER_HOST = '127.0.0.1'
 ANDROID_ADB_SERVER_PORT = 5037
+
+
+ADB_CAP_LOCAL_PATH = '/data/local/tmp/screencap.raw'
