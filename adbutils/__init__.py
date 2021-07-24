@@ -14,9 +14,9 @@ from adbutils._utils import (get_adb_exe, split_cmd, _popen_kwargs, get_std_enco
 from adbutils.constant import (ANDROID_ADB_SERVER_HOST, ANDROID_ADB_SERVER_PORT, ADB_CAP_REMOTE_PATH,
                                ADB_CAP_LOCAL_PATH)
 from adbutils.exceptions import (AdbError, AdbShellError, AdbTimeout, NoDeviceSpecifyError, AdbDeviceConnectError,
-                                 )
+                                 AdbInstallError)
 from adbutils._wraps import retries
-from typing import Union, List, Optional, Tuple, Dict
+from typing import Union, List, Optional, Tuple, Dict, Match
 
 
 class ADBClient(object):
@@ -254,10 +254,9 @@ class ADBClient(object):
         Returns:
             None
         """
-        # TODO:判断文件是否存在于设备中
         self.cmd(['pull', remote, local], decode=False)
 
-    def install(self, local: str, install_options: Union[str, list, None] = None) -> None:
+    def install(self, local: str, install_options: Union[str, list, None] = None) -> bool:
         """
         command 'adb install <local>'
 
@@ -270,9 +269,11 @@ class ADBClient(object):
                     "-d",  # 允许APK降级覆盖安装
                     "-l",  # 将应用安装到保护目录/mnt/asec
                     "-s",  # 将应用安装到sdcard
-
+        Raises:
+            AdbInstallError: 安装失败
+            AdbError: 安装失败
         Returns:
-            None
+            安装成功返回True
         """
         cmds = ['install']
         if isinstance(install_options, str):
@@ -281,11 +282,19 @@ class ADBClient(object):
             cmds = cmds + install_options
 
         cmds = cmds + [local]
-        print(cmds)
-        # ret = self.cmd(cmds)
-        # TODO: 增加安装应用是否成功的判断
-        # if re.search(r"Failure \[.*?\]", out):
-        #     raise AdbError("Installation Failure\n%s" % out)
+        proc = self.start_cmd(cmds)
+        stdout, stderr = proc.communicate()
+
+        stdout = stdout.decode(get_std_encoding(stdout))
+        stderr = stderr.decode(get_std_encoding(stdout))
+
+        pattern = re.compile("Failure \[(.+):.+\]")
+        if proc.returncode == 0:
+            return True
+        elif pattern.search(stderr):
+            raise AdbInstallError(pattern.findall(stderr)[0])
+        else:
+            raise AdbError(stdout, stderr)
 
     def uninstall(self, package_name: str, install_options: Optional[str] = None) -> None:
         """
@@ -478,6 +487,65 @@ class ADBShell(ADBClient):
         """
         orientation = self.getDisplayOrientation()
         return orientation
+
+    @property
+    def foreground_activity(self) -> str:
+        """
+        获取当前前台activity
+
+        Raises:
+            AdbError: 没有获取到前台activity
+        Returns:
+            当前activity
+        """
+        m = self._get_activityRecord(key='mResumedActivity')
+        if m:
+            return m.group('activity')
+        else:
+            raise AdbError('', f'get foreground_activity unknown error: {m}')
+
+    @property
+    def foreground_package(self) -> str:
+        """
+        获取当前前台包名
+
+        Raises:
+            AdbError: 没有获取到前台包名
+        Returns:
+            当前包名
+        """
+        m = self._get_activityRecord(key='mResumedActivity')
+        if m:
+            return m.group('packageName')
+        else:
+            raise AdbError('', f'get foreground_package unknown error: {m}')
+
+    def running_activities(self):
+        cmds = ['dumpsys', 'activity', 'activities']
+        ret = self.shell(cmds)
+        pattren = re.compile(
+            'Running activities \(most recent first\):\r\n(.*)\r\n\r\n    mResumedActivity', re.S)
+        # TODO
+        print(pattren.findall(ret))
+
+    def _get_activityRecord(self, key: str) -> Optional[Match[str]]:
+        """
+        command 'adb dumpsys activity activities'
+        根据<key>获取对应ActivityRecord信息
+
+        Returns:
+            Match,可以使用memory/user/packageName/activity/task
+        """
+        cmds = ['dumpsys', 'activity', 'activities']
+        ret = self.shell(cmds)
+        pattern = re.compile(
+            f'{key}: '
+            'ActivityRecord\{(?P<memory>.*) (?P<user>.*) (?P<packageName>.*)/\.?(?P<activity>.*) (?P<task>.*)}[\n\r]')
+        m = pattern.search(ret)
+        if m:
+            return m
+        else:
+            return None
 
     def check_file(self, path: str, name: str) -> bool:
         """

@@ -97,7 +97,6 @@ class NonBlockingStreamReader(object):
                 line = _stream.readline()
                 if line is not None:
                     _queue.put(line)
-                    # TODO: kill thread
                 elif kill_event.is_set():
                     break
                 elif raise_EOF:

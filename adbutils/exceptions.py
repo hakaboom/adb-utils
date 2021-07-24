@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+from adbutils.constant import ADB_INSTALL_FAILED
+
 
 class BaseError(Exception):
     def __init__(self, message):
@@ -22,6 +24,7 @@ class AdbShellError(AdbError):
     """ There was an exception that occurred while ADB shell command """
 
 
+# ---------------------------------BaseError---------------------------------
 class AdbTimeout(BaseError):
     """ Adb command time out"""
 
@@ -32,3 +35,15 @@ class NoDeviceSpecifyError(BaseError):
 
 class AdbDeviceConnectError(BaseError):
     """ failed to connect device """
+
+
+class AdbInstallError(BaseError):
+    """ An error while adb install apk failed """
+    def __repr__(self):
+        if self.message in ADB_INSTALL_FAILED:
+            return repr(ADB_INSTALL_FAILED[self.message])
+        else:
+            return repr(f'adb install failed,\n{self.message}')
+
+    def __str__(self):
+        return repr(self)
