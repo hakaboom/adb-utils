@@ -4,8 +4,6 @@ import os
 import queue
 import threading
 import subprocess
-import time
-from functools import wraps
 from typing import IO, Optional, Union
 from adbutils.constant import DEFAULT_ADB_PATH
 
@@ -135,15 +133,3 @@ class UnexpectedEndOfStream(Exception):
     pass
 
 
-class print_run_time(object):
-    def __init__(self):
-        pass
-
-    def __call__(self, func):
-        @wraps(func)
-        def wrapped_function(*args, **kwargs):
-            start_time = time.time()
-            ret = func(*args, **kwargs)
-            print("{}() run time is {time:.2f}ms".format(func.__name__, time=(time.time() - start_time) * 1000))
-            return ret
-        return wrapped_function

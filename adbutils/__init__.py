@@ -4,16 +4,19 @@ import re
 import socket
 import os
 import time
+import warnings
 
-import cv2
 import numpy as np
-from baseImage import Rect, IMAGE
+from baseImage import Rect
 
-from adbutils._utils import (get_adb_exe, split_cmd, _popen_kwargs, get_std_encoding, print_run_time, check_file)
+from adbutils._utils import (get_adb_exe, split_cmd, _popen_kwargs, get_std_encoding, check_file,
+                             NonBlockingStreamReader)
 from adbutils.constant import (ANDROID_ADB_SERVER_HOST, ANDROID_ADB_SERVER_PORT, ADB_CAP_REMOTE_PATH,
                                ADB_CAP_LOCAL_PATH)
-from adbutils.exceptions import (AdbError, AdbShellError, AdbTimeout, NoDeviceSpecifyError)
-from typing import Union, List, Optional, Tuple, Dict, Any
+from adbutils.exceptions import (AdbError, AdbShellError, AdbTimeout, NoDeviceSpecifyError, AdbDeviceConnectError,
+                                 )
+from adbutils._wraps import retries
+from typing import Union, List, Optional, Tuple, Dict
 
 
 class ADBClient(object):
@@ -32,6 +35,7 @@ class ADBClient(object):
         self.device_id = device_id
         self.adb_path = adb_path or get_adb_exe()
         self._set_cmd_options(host, port)
+        self.connect()
 
     @property
     def host(self) -> str:
@@ -100,7 +104,8 @@ class ADBClient(object):
         """
         self.cmd('kill-server', devices=False)
 
-    def connect(self, force: Optional[bool] = False) -> None:
+    @retries(3, exceptions=(AdbDeviceConnectError,))
+    def connect(self, force: Optional[bool] = False) -> bool:
         """
         command 'adb connect <device_id>'
 
@@ -108,11 +113,14 @@ class ADBClient(object):
             force: 不判断设备当前状态,强制连接
 
         Returns:
-                None
+                连接成功返回True,连接失败返回False
         """
         if self.device_id and ':' in self.device_id and (force or self.status != 'devices'):
-            ret = self.cmd("connect %s" % self.device_id, devices=False)
-            # TODO: 判断设备是否连接上
+            ret = self.cmd(f"connect {self.device_id}", devices=False)
+            if 'failed' in ret or self.status != 'devices':
+                raise AdbDeviceConnectError(f'failed to connect to {self.device_id}')
+            return True
+        return False
 
     def disconnect(self) -> None:
         """
@@ -153,7 +161,7 @@ class ADBClient(object):
         if local:
             cmds = ['forward', '--remove', local]
         else:
-            cmds = ['forawrd', '--remove-all']
+            cmds = ['forward', '--remove-all']
         self.cmd(cmds)
 
     def get_forwards(self, device_id: Optional[str] = None) -> Dict[str, List[Tuple[str, str]]]:
@@ -273,7 +281,8 @@ class ADBClient(object):
             cmds = cmds + install_options
 
         cmds = cmds + [local]
-        ret = self.cmd(cmds)
+        print(cmds)
+        # ret = self.cmd(cmds)
         # TODO: 增加安装应用是否成功的判断
         # if re.search(r"Failure \[.*?\]", out):
         #     raise AdbError("Installation Failure\n%s" % out)
@@ -315,6 +324,8 @@ class ADBClient(object):
             return stdout.strip()
         elif "not found" in stderr:
             return None
+        elif 'device offline' in stderr:
+            return 'offline'
         else:
             raise AdbError(stdout, stderr)
     
@@ -580,7 +591,7 @@ class ADBShell(ADBClient):
             display orientation information
 
         """
-        # another way to get orientation, for old sumsung device(sdk version 15) from xiaoma
+        # another way to get orientation, for old sumsung device(sdk version 15)
         SurfaceFlingerRE = re.compile('orientation=(\d+)')
         ret = self.shell('dumpsys SurfaceFlinger')
         m = SurfaceFlingerRE.search(ret)
@@ -594,9 +605,8 @@ class ADBShell(ADBClient):
         m = surfaceOrientationRE.search(ret)
         if m:
             return int(m.group(1))
-
         # We couldn't obtain the orientation
-        # TODO: warnings.warn("Could not obtain the orientation, return 0")
+        warnings.warn("Could not obtain the orientation, return 0")
         return 0
     
     def getprop(self, key: str, strip: Optional[bool] = True) -> Optional[str]:
@@ -681,7 +691,7 @@ class ADBShell(ADBClient):
             ret = self.raw_shell(cmds, decode=decode).rstrip()
             m = re.match("(.*)---(\d+)---$", ret, re.DOTALL)
             if not m:
-                # TODO: warnings.warn('return code not matched)
+                warnings.warn('return code not matched')
                 stdout = ret
                 returncode = 0
             else:
@@ -771,7 +781,7 @@ class ADBDevice(ADBShell):
             x_max, y_max = int(rect.br.x), int(rect.br.y)
             img_data = img_data[y_min:y_max, x_min:x_max]
 
-        img_data = img_data[:, :, ::-1][:, :, 1:4]  # imgData中rgbA转为Abgr,并截取bgr
+        img_data = img_data[:, :, ::-1][:, :, 1:4]  # imgData中rgbA转为ABGR,并截取bgr
         # 删除raw临时文件
         os.remove(raw_local_path)
         return img_data

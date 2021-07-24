@@ -28,3 +28,7 @@ class AdbTimeout(BaseError):
 
 class NoDeviceSpecifyError(BaseError):
     """ No device was specified when ADB was commanded """
+
+
+class AdbDeviceConnectError(BaseError):
+    """ failed to connect device """
