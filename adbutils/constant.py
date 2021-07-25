@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import os
+import re
 
+IP_PATTERN = re.compile(r'(\d+\.){3}\d+')
 STATICPATH = os.path.join(os.path.abspath('adbutils'), 'static')
 DEFAULT_ADB_PATH = {
     "Windows": os.path.join(STATICPATH, "adb", "windows"),
@@ -15,6 +17,7 @@ ANDROID_ADB_SERVER_PORT = 5037
 ADB_CAP_REMOTE_PATH = '/data/local/tmp/screencap.raw'
 ADB_CAP_LOCAL_PATH = './{device_id}.raw'
 
+ADB_KEYBOARD_APK_PATH = os.path.join(STATICPATH, "ADBKeyboard.apk")
 ADB_INSTALL_FAILED = {
     "INSTALL_FAILED_ALREADY_EXISTS": "应用已经存在，或卸载了但没卸载干净;建议使用'-r'安装",
     "INSTALL_FAILED_INVALID_APK": "无效的 APK 文件",

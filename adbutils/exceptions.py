@@ -25,6 +25,10 @@ class AdbShellError(AdbError):
 
 
 # ---------------------------------BaseError---------------------------------
+class AdbSDKVersionError(BaseError):
+    """Errors caused by insufficient sdb versions """
+
+
 class AdbTimeout(BaseError):
     """ Adb command time out"""
 

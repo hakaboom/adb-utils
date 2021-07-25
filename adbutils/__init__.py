@@ -5,18 +5,19 @@ import socket
 import os
 import time
 import warnings
+from functools import reduce
 
 import numpy as np
-from baseImage import Rect
+from baseImage import Rect, Point
 
 from adbutils._utils import (get_adb_exe, split_cmd, _popen_kwargs, get_std_encoding, check_file,
                              NonBlockingStreamReader)
 from adbutils.constant import (ANDROID_ADB_SERVER_HOST, ANDROID_ADB_SERVER_PORT, ADB_CAP_REMOTE_PATH,
-                               ADB_CAP_LOCAL_PATH)
+                               ADB_CAP_LOCAL_PATH, IP_PATTERN)
 from adbutils.exceptions import (AdbError, AdbShellError, AdbTimeout, NoDeviceSpecifyError, AdbDeviceConnectError,
-                                 AdbInstallError)
+                                 AdbInstallError, AdbSDKVersionError)
 from adbutils._wraps import retries
-from typing import Union, List, Optional, Tuple, Dict, Match
+from typing import Union, List, Optional, Tuple, Dict, Match, Iterator
 
 
 class ADBClient(object):
@@ -410,7 +411,7 @@ class ADBShell(ADBClient):
     SHELL_ENCODING = 'utf-8'  # adb shell的编码
 
     @property
-    def line_breaker(self):
+    def line_breaker(self) -> str:
         """
         Set carriage return and line break property for various platforms and SDK versions
 
@@ -489,6 +490,62 @@ class ADBShell(ADBClient):
         return orientation
 
     @property
+    def ip_address(self) -> Optional[str]:
+        """
+        获得设备ip地址
+
+        Returns:
+            未找到则返回None,找到则返回IP address
+        """
+        def get_ip_address_from_interface(interface):
+            # android >= 6.0: ip -f inet addr show {interface}
+            try:
+                res = self.shell(f'ip -f inet addr show {interface}')
+            except AdbShellError:
+                res = ''
+            matcher = re.search(r"inet (?P<ip>(\d+\.){3}\d+)", res)
+            if matcher:
+                return matcher.group('ip')
+
+            # android >= 6.0 backup method: ifconfig
+            try:
+                res = self.shell('ifconfig')
+            except AdbShellError:
+                res = ''
+            matcher = re.search(interface + r'.*?inet addr:((\d+\.){3}\d+)', res, re.DOTALL)
+            if matcher:
+                return matcher.group(1)
+
+            # android <= 6.0: netcfg
+            try:
+                res = self.shell('netcfg')
+            except AdbShellError:
+                res = ''
+            matcher = re.search(interface + r'.* ((\d+\.){3}\d+)/\d+', res)
+            if matcher:
+                return matcher.group(1)
+
+            # android <= 6.0 backup method: getprop dhcp.{}.ipaddress
+            try:
+                res = self.shell('getprop dhcp.{}.ipaddress'.format(interface))
+            except AdbShellError:
+                res = ''
+            matcher = IP_PATTERN.search(res)
+            if matcher:
+                return matcher.group(0)
+
+            # sorry, no more methods...
+            return None
+
+        interfaces = ('eth0', 'eth1', 'wlan0')
+        for i in interfaces:
+            ip = get_ip_address_from_interface(i)
+            if ip and not ip.startswith('172.') and not ip.startswith('127.') and not ip.startswith('169.'):
+                return ip
+
+        return None
+
+    @property
     def foreground_activity(self) -> str:
         """
         获取当前前台activity
@@ -520,13 +577,78 @@ class ADBShell(ADBClient):
         else:
             raise AdbError('', f'get foreground_package unknown error: {m}')
 
-    def running_activities(self):
+    @property
+    def running_activities(self) -> list:
+        """
+        获取正在运行的所有activity
+
+        Returns:
+            所有正在运行的activity
+        """
+        ret_list = []
+        activities = self._get_running_activities()
+        for match in activities:
+            ret_list.append(match.group('activity'))
+
+        # if ret_list:
+        #     list(set(ret_list))
+        return ret_list
+
+    @property
+    def running_package(self) -> list:
+        """
+        获取正在运行的所有包名
+
+        Returns:
+            所有正在运行的包名
+        """
+        ret_list = []
+        activities = self._get_running_activities()
+        for match in activities:
+            ret_list.append(match.group('packageName'))
+
+        if ret_list:
+            list(set(ret_list))
+        return ret_list
+
+    def _get_running_activities(self) -> Optional[Iterator[Match[str]]]:
+        """
+        command 'adb dumpsys activity activities'
+        获取各个Stack中正在运行的activities参数
+
+        Returns:
+            包含了多个Match的迭代器, Match可以使用memory/user/packageName/activity/task
+        """
+        running_activities = []
+        stack_index = 1  # 需要获取的Stack
         cmds = ['dumpsys', 'activity', 'activities']
-        ret = self.shell(cmds)
-        pattren = re.compile(
-            'Running activities \(most recent first\):\r\n(.*)\r\n\r\n    mResumedActivity', re.S)
-        # TODO
-        print(pattren.findall(ret))
+        activities = self.shell(cmds)
+        # 获取Stack
+        pattern = re.compile('Stack #([\d+]):')
+        stack = pattern.findall(activities)
+        if not stack:
+            # TODO: 好像不可能获取不到,没获取到直接弹异常
+            return None
+        stack.sort()
+        # 根据Stack拆分running activities
+        for index in stack:
+            pattern = re.compile(f'Stack #{index}[\s\S]+?Running activities \(most recent first\):([\s\S]+?)\r\n\r\n')
+            ret = pattern.findall(activities)
+            if ret:
+                running_activities.append(ret[0])
+        # 获取stack_index对应的activities
+        if len(running_activities) < stack_index:
+            # TODO: 是否需要考虑这种情况
+            return None
+        activities = running_activities[stack_index]
+        pattern = re.compile(
+            "TaskRecord[\s\S]+?Run #(?P<index>[\d+]):[\s]?"
+            "ActivityRecord\{(?P<memory>.*) (?P<user>.*) (?P<packageName>.*)/\.?(?P<activity>.*) (?P<task>.*)}")
+        ret = pattern.finditer(activities)
+        if ret:
+            return ret
+        else:
+            return None
 
     def _get_activityRecord(self, key: str) -> Optional[Match[str]]:
         """
@@ -547,6 +669,21 @@ class ADBShell(ADBClient):
         else:
             return None
 
+    def check_app(self, package: str) -> bool:
+        """
+        command 'adb shell
+
+        Args:
+            package: package name
+
+        Returns:
+            return True if find, false otherwise
+        """
+        app_list = self.app_list()
+        if package in app_list:
+            return True
+        return False
+
     def check_file(self, path: str, name: str) -> bool:
         """
         command 'adb shell find <name> in the <path>'
@@ -561,6 +698,12 @@ class ADBShell(ADBClient):
         return bool(self.raw_shell(['find', path, '-name', name]))
 
     def getMaxXY(self) -> Tuple[int, int]:
+        """
+        获取屏幕可点击的最大长宽距离
+
+        Returns:
+            max_x,max_y
+        """
         ret = self.shell(['getevent', '-p']).split('\n')
         max_x, max_y = None, None
         pattern = re.compile(r'max ([0-9]+)')
@@ -633,7 +776,7 @@ class ADBShell(ADBClient):
 
         return {}
 
-    def _getDisplayDensity(self, strip=True):
+    def _getDisplayDensity(self, strip=True) -> Union[float, int]:
         """
         Get display density
 
@@ -676,7 +819,18 @@ class ADBShell(ADBClient):
         # We couldn't obtain the orientation
         warnings.warn("Could not obtain the orientation, return 0")
         return 0
-    
+
+    def keyevent(self, keycode: Union[str, int]) -> None:
+        """
+        command 'adb shell input keyevent'
+        Args:
+            keycode: key code number or name
+
+        Returns:
+            None
+        """
+        self.shell(['input', 'keyevent', str(keycode)])
+
     def getprop(self, key: str, strip: Optional[bool] = True) -> Optional[str]:
         """
         command 'adb shell getprop <key>
@@ -802,6 +956,7 @@ class ADBShell(ADBClient):
 
 
 class ADBDevice(ADBShell):
+    """ 操作类的函数都会放这里 """
     def screenshot(self, rect: Union[Rect, Tuple[int, int, int, int], List[int]] = None) -> np.ndarray:
         """
         command 'adb screencap'
@@ -853,3 +1008,116 @@ class ADBDevice(ADBShell):
         # 删除raw临时文件
         os.remove(raw_local_path)
         return img_data
+
+    def start_app(self, package: str, activity: Optional[str] = None):
+        """
+        if not activity command 'adb shell monkey'
+        if activity command 'adb shell am start
+
+        Args:
+            package: package name
+            activity: activity name
+
+        Returns:
+            None
+        """
+        if not activity:
+            cmds = ['monkey', '-p', package, '-c', 'android.intent.category.LAUNCHER', '1']
+        else:
+            cmds = ['am', 'start', '-n', f'{package}/{package}.{activity}']
+        print(self.shell(cmds))
+
+    def stop_app(self, package: str) -> None:
+        """
+        command 'adb shell am force-stop' to force stop the application
+
+        Args:
+            package: package name
+
+        Returns:
+            None
+        """
+        self.shell(['am', 'force-stop', package])
+
+    def clear_app(self, package: str) -> None:
+        """
+        command 'adb shell pm clear' to force stop the application
+        这条命令的效果相当于在设置里的应用信息界面点击了「清除缓存」和「清除数据」
+
+        Args:
+            package: package name
+
+        Returns:
+            None
+        """
+        self.shell(['pm', 'clear', package])
+
+    def tap(self, point: Union[Tuple[int, int], Point]):
+        """
+        command 'adb shell input tap' 点击屏幕
+
+        Args:
+            point: 坐标(x,y)
+
+        Returns:
+            None
+        """
+        x, y = None, None
+        if isinstance(point, Point):
+            x, y = point.x, point.y
+        elif isinstance(point, (tuple, list)):
+            x, y = point[0], point[1]
+        self.shell(f'input tap {x} {y}')
+
+    def swipe(self, start_point: Union[Tuple[int, int], Point], end_point: Union[Tuple[int, int], Point],
+              duration: int = 500) -> None:
+        """
+        command 'adb shell input swipe> 滑动屏幕
+
+        Args:
+            start_point: 起点坐标
+            end_point: 重点坐标
+            duration: 操作后延迟
+        Returns:
+            None
+        """
+        def _handle(point):
+            if isinstance(point, Point):
+                return point.x, point.y
+            elif isinstance(point, (tuple, list)):
+                return point
+        start_x, start_y = _handle(start_point)
+        end_x, end_y = _handle(end_point)
+
+        version = self.sdk_version
+        if version <= 15:
+            raise AdbSDKVersionError(f'swipe: API <= 15 not supported (version={version})')
+        elif version <= 17:
+            self.shell(f'input swipe {start_x} {start_y} {end_x} {end_y} {duration}')
+        else:
+            self.shell(f'input touchscreen swipe {start_x} {start_y} {end_x} {end_y}')
+
+    def _get_default_input_method(self) -> str:
+        """
+        获取当前输入法ID
+
+        Returns:
+            输入法ID
+        """
+        # TODO: 没写完
+        ret = self.shell(['settings', 'get', 'secure', 'default_input_method'])
+        if ret:
+            return ret
+        raise AdbError('', 'get default input method unknown error ')
+
+    def text(self, text, enter: Optional[bool] = True):
+        """
+        input text on the device
+
+        Args:
+            text: 需要输入的字符
+            enter: press 'Enter' key
+
+        Returns:
+            None
+        """
