@@ -10,5 +10,5 @@ setup(
     description='This is a secondary package of adb',
     url='https://github.com/hakaboom/base_image',
     packages=['adbutils'],
-    install_requires=[],
+    install_requires=["baseImage==1.0.6"],
 )
