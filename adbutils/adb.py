@@ -428,6 +428,111 @@ class ADBShell(ADBClient):
             return getattr(self, '_line_breaker')
 
     @property
+    def memory(self) -> str:
+        """
+        获取设备内存大小
+
+        Returns:
+            单位MB
+        """
+        ret = self.shell(['dumpsys', 'meminfo'])
+        pattern = re.compile('.*Total RAM:\s+(\S+)\s+', re.DOTALL)
+        m = pattern.search(ret)
+        if m:
+            memory = pattern.search(ret).group(1)
+        else:
+            raise AdbBaseError(ret)
+
+        if ',' in memory:
+            memory = memory.split(',')
+            # GB: memory[0], MB: memory[1], KB: memory[2]
+            memory = int(int(memory[0]) * 1000) + int(memory[1])
+        else:
+            memory = round(memory / 1024)
+
+        return f'{str(memory)}MB'
+
+    def cpu_coreNum(self) -> Optional[int]:
+        """
+        获取cpu核心数量
+
+        Returns:
+            cpu核心数量
+        """
+        ret = self.shell("cat /proc/cpuinfo").strip()
+        cpuNum = ret.count('processor')
+        if cpuNum:
+            return int(cpuNum)
+        else:
+            return None
+
+    @property
+    def cpu_max_freq(self) -> int:
+        """
+        获取cpu最高频率
+
+        Returns:
+            最高频率
+        """
+        ret = self.shell("cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq")
+        if ret:
+            return int(int(ret) / 1000)
+
+    @property
+    def cpu_min_freq(self) -> int:
+        """
+        获取cpu最低频率
+
+        Returns:
+            最低频率
+        """
+        ret = self.shell("cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_min_freq")
+        if ret:
+            return int(int(ret) / 1000)
+
+    @property
+    def cpu_cur_freq(self) -> int:
+        """
+        获取cpu当前频率
+
+        Returns:
+            当前频率
+        """
+        ret = self.shell("cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_cur_freq")
+        if ret:
+            return int(int(ret) / 1000)
+
+    @property
+    def cpu_abi(self) -> str:
+        """
+        获取cpu构架
+        Returns:
+            cpu构建
+        """
+        res = self.shell("getprop ro.product.cpu.abi")
+        return res.strip()
+
+    @property
+    def model(self) -> str:
+        """
+        获取手机型号
+
+        Returns:
+            手机型号
+        """
+        return self.getprop('ro.product.model')
+
+    @property
+    def manufacturer(self) -> str:
+        """
+        获取手机厂商名
+
+        Returns:
+            手机厂商名
+        """
+        return self.getprop('ro.product.manufacturer')
+
+    @property
     def sdk_version(self) -> int:
         """
         获取sdk版本
