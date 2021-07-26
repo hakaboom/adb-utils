@@ -13,9 +13,9 @@ from baseImage import Rect, Point
 from adbutils._utils import (get_adb_exe, split_cmd, _popen_kwargs, get_std_encoding, check_file,
                              NonBlockingStreamReader)
 from adbutils.constant import (ANDROID_ADB_SERVER_HOST, ANDROID_ADB_SERVER_PORT, ADB_CAP_REMOTE_PATH,
-                               ADB_CAP_LOCAL_PATH, IP_PATTERN)
-from adbutils.exceptions import (AdbError, AdbShellError, AdbTimeout, NoDeviceSpecifyError, AdbDeviceConnectError,
-                                 AdbInstallError, AdbSDKVersionError)
+                               ADB_CAP_LOCAL_PATH, IP_PATTERN, ADB_DEFAULT_KEYBOARD)
+from adbutils.exceptions import (AdbError, AdbShellError, AdbBaseError, AdbTimeout, NoDeviceSpecifyError,
+                                 AdbDeviceConnectError, AdbInstallError, AdbSDKVersionError)
 from adbutils._wraps import retries
 from typing import Union, List, Optional, Tuple, Dict, Match, Iterator
 
@@ -551,7 +551,7 @@ class ADBShell(ADBClient):
         获取当前前台activity
 
         Raises:
-            AdbError: 没有获取到前台activity
+            AdbBaseError: 没有获取到前台activity
         Returns:
             当前activity
         """
@@ -559,7 +559,7 @@ class ADBShell(ADBClient):
         if m:
             return m.group('activity')
         else:
-            raise AdbError('', f'get foreground_activity unknown error: {m}')
+            raise AdbBaseError(f'get foreground_activity unknown error: {m}')
 
     @property
     def foreground_package(self) -> str:
@@ -567,7 +567,7 @@ class ADBShell(ADBClient):
         获取当前前台包名
 
         Raises:
-            AdbError: 没有获取到前台包名
+            AdbBaseError: 没有获取到前台包名
         Returns:
             当前包名
         """
@@ -575,7 +575,7 @@ class ADBShell(ADBClient):
         if m:
             return m.group('packageName')
         else:
-            raise AdbError('', f'get foreground_package unknown error: {m}')
+            raise AdbBaseError(f'get foreground_package unknown error: {m}')
 
     @property
     def running_activities(self) -> list:
@@ -610,6 +610,76 @@ class ADBShell(ADBClient):
         if ret_list:
             list(set(ret_list))
         return ret_list
+
+    @property
+    def default_ime(self) -> str:
+        """
+        获取当前输入法ID
+
+        Returns:
+            输入法ID
+        """
+        try:
+            ime = self.shell(['settings', 'get', 'secure', 'default_input_method']).strip()
+        except AdbShellError:
+            ime = None
+        return ime
+
+    @property
+    def ime_list(self) -> list:
+        """
+        获取系统可用输入法
+
+        Returns:
+            输入法列表
+        """
+        ret = self.shell(['ime', 'list', '-s'])
+        if ret:
+            return ret.split()
+
+    def is_keyboard_shown(self) -> bool:
+        """
+        判断键盘是否显示
+
+        Returns:
+            True显示键盘/False未显示键盘
+        """
+        ret = self.shell(['dumpsys', 'input_method'])
+        if ret:
+            return 'mInputShown=true' in ret
+        return False
+
+    def is_screenon(self) -> bool:
+        """
+        检测屏幕打开关闭状态
+
+        Raises:
+            AdbBaseError: 未检测到屏幕打开状态
+        Returns:
+            True屏幕打开/False屏幕关闭
+        """
+        pattern = re.compile('mScreenOnFully=(?P<Bool>true|false)')
+        ret = self.shell(['dumpsys', 'window', 'policy'])
+        m = pattern.search(ret)
+        if m:
+            return m.group('Bool') == 'true'
+        raise AdbBaseError('Could not determine screen ON state')
+
+    def is_locked(self) -> bool:
+        """
+        判断屏幕是否锁定
+
+        Raises:
+            AdbBaseError: 未检测到屏幕锁定状态
+        Returns:
+            True屏幕锁定/False屏幕未锁定
+        """
+        ret = self.shell('dumpsys window policy')
+        pattern = re.compile('(?:mShowingLockscreen|isStatusBarKeyguard|showing)=(?P<Bool>true|false)')
+        m = pattern.search(ret)
+        if m:
+            return m.group('Bool') == 'true'
+        raise AdbBaseError('Could not determine screen lock state')
 
     def _get_running_activities(self) -> Optional[Iterator[Match[str]]]:
         """
@@ -1097,20 +1167,24 @@ class ADBDevice(ADBShell):
         else:
             self.shell(f'input touchscreen swipe {start_x} {start_y} {end_x} {end_y}')
 
-    def _get_default_input_method(self) -> str:
+    def set_input_method(self, ime_method: str, ime_apk_path: Optional[str] = None) -> None:
         """
-        获取当前输入法ID
+        设置输入法
 
+        Args:
+            ime_method: 输入法ID
+            ime_apk_path: 输入法安装包
         Returns:
-            输入法ID
+            None
         """
-        # TODO: 没写完
-        ret = self.shell(['settings', 'get', 'secure', 'default_input_method'])
-        if ret:
-            return ret
-        raise AdbError('', 'get default input method unknown error ')
+        if ime_method not in self.ime_list:
+            if ime_apk_path:
+                self.install(ime_apk_path)
+        if self.default_ime != ime_method:
+            self.shell(['ime', 'enable', ime_method])
+            self.shell(['ime', 'set', ime_method])
 
-    def text(self, text, enter: Optional[bool] = True):
+    def text(self, text, enter: Optional[bool] = False):
         """
         input text on the device
 
@@ -1121,3 +1195,11 @@ class ADBDevice(ADBShell):
         Returns:
             None
         """
+        if self.default_ime == ADB_DEFAULT_KEYBOARD:
+            self.shell(f"am broadcast -a ADB_INPUT_TEXT --es msg '{str(text)}'")
+        else:
+            self.shell(['input', 'text', str(text)])
+
+        if enter:
+            self.shell(['input', 'keyevent', 'ENTER'])
+

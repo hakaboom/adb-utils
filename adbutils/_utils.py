@@ -36,7 +36,7 @@ def split_cmd(cmds) -> list:
     return cmds.split() if isinstance(cmds, str) else list(cmds)
 
 
-def _popen_kwargs():
+def _popen_kwargs() -> dict:
     creationflags = 0
     startupinfo = None
     if sys.platform.startswith('win'):

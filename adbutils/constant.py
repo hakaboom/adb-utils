@@ -17,6 +17,7 @@ ANDROID_ADB_SERVER_PORT = 5037
 ADB_CAP_REMOTE_PATH = '/data/local/tmp/screencap.raw'
 ADB_CAP_LOCAL_PATH = './{device_id}.raw'
 
+ADB_DEFAULT_KEYBOARD = 'com.android.adbkeyboard/.AdbIME'
 ADB_KEYBOARD_APK_PATH = os.path.join(STATICPATH, "ADBKeyboard.apk")
 ADB_INSTALL_FAILED = {
     "INSTALL_FAILED_ALREADY_EXISTS": "应用已经存在，或卸载了但没卸载干净;建议使用'-r'安装",
