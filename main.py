@@ -5,4 +5,4 @@ twine upload dist/*
 from adbutils import ADBDevice
 
 android = ADBDevice(device_id='emulator-5554')
-print(android.getprop("ro.product.manufacturer"))
+print(android.android_version)

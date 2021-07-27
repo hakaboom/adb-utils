@@ -533,6 +533,21 @@ class ADBShell(ADBClient):
         return self.getprop('ro.product.manufacturer')
 
     @property
+    def android_version(self) -> str:
+        """
+        获取系统安卓版本
+
+        Returns:
+            安卓版本
+        """
+        if not hasattr(self, '_android_version'):
+            sdk = self.getprop('ro.build.version.release')
+            setattr(self, '_android_version', sdk)
+            return self.android_version
+        else:
+            return getattr(self, '_android_version')
+
+    @property
     def sdk_version(self) -> int:
         """
         获取sdk版本
@@ -580,6 +595,12 @@ class ADBShell(ADBClient):
             "max_y": max_y,
         })
         return display_info
+
+    @property
+    def dpi(self) -> int:
+        ret = self.getprop('ro.sf.lcd_density', True)
+        if ret:
+            return int(ret)
 
     @property
     def orientation(self) -> int:
