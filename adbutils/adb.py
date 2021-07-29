@@ -65,7 +65,7 @@ class ADBClient(object):
         :return: adb server版本
         """
         ret = self.cmd('version', devices=False)
-        pattern = re.compile('Android Debug Bridge version \d.\d.(\d+)\n')
+        pattern = re.compile('Android Debug Bridge version \d.\d.(\d+)')
         version = pattern.findall(ret)
         if version:
             return int(version[0])
@@ -116,7 +116,7 @@ class ADBClient(object):
         """
         if self.device_id and ':' in self.device_id and (force or self.status != 'devices'):
             ret = self.cmd(f"connect {self.device_id}", devices=False)
-            if 'failed' in ret or self.status != 'devices':
+            if 'failed' in ret:
                 raise AdbDeviceConnectError(f'failed to connect to {self.device_id}')
             return True
         return False
