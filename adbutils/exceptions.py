@@ -2,9 +2,18 @@
 from adbutils.constant import ADB_INSTALL_FAILED
 
 
-class AdbError(Exception):
+class AdbBaseError(Exception):
+    def __init__(self, message):
+        self.message = message
+
+    def __repr__(self):
+        return repr(self.message)
+
+
+class AdbError(AdbBaseError):
     """ There was an exception that occurred while ADB command """
-    def __init__(self, stdout, stderr):
+    def __init__(self, stdout, stderr, message: str = None):
+        super(AdbError, self).__init__(message=message)
         self.stdout = stdout
         self.stderr = stderr
 
@@ -14,20 +23,6 @@ class AdbError(Exception):
 
 class AdbShellError(AdbError):
     """ There was an exception that occurred while ADB shell command """
-
-
-# ---------------------------------BaseError---------------------------------
-
-class BaseError(Exception):
-    def __init__(self, message):
-        self.message = message
-
-    def __repr__(self):
-        return repr(self.message)
-
-
-class AdbBaseError(BaseError):
-    """ There was an exception that occurred while ADB command """
 
 
 class AdbSDKVersionError(AdbBaseError):
@@ -49,10 +44,10 @@ class AdbDeviceConnectError(AdbBaseError):
 class AdbInstallError(AdbBaseError):
     """ An error while adb install apk failed """
     def __repr__(self):
-        if self.message in ADB_INSTALL_FAILED:
-            return repr(ADB_INSTALL_FAILED[self.message])
-        else:
-            return repr(f'adb install failed,\n{self.message}')
+        return repr(str(self))
 
     def __str__(self):
-        return repr(self)
+        if self.message in ADB_INSTALL_FAILED:
+            return ADB_INSTALL_FAILED[self.message]
+        else:
+            return f'adb install failed,\n{self.message}'
