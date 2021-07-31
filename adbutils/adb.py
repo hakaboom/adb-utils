@@ -103,8 +103,8 @@ class ADBClient(object):
         """
         self.cmd('kill-server', devices=False)
 
-    @retries(3, exceptions=(AdbDeviceConnectError,))
-    def connect(self, force: Optional[bool] = False) -> bool:
+    @retries(2, exceptions=(AdbDeviceConnectError,))
+    def connect(self, force: Optional[bool] = False) -> None:
         """
         command 'adb connect <device_id>'
 
@@ -115,11 +115,9 @@ class ADBClient(object):
                 连接成功返回True,连接失败返回False
         """
         if self.device_id and ':' in self.device_id and (force or self.status != 'devices'):
-            ret = self.cmd(f"connect {self.device_id}", devices=False)
+            ret = self.cmd(f"connect {self.device_id}", devices=False, skip_error=True)
             if 'failed' in ret:
                 raise AdbDeviceConnectError(f'failed to connect to {self.device_id}')
-            return True
-        return False
 
     def disconnect(self) -> None:
         """
@@ -349,6 +347,7 @@ class ADBClient(object):
             timeout (int): 设置命令超时时间
             skip_error (bool): 是否跳过报错
         Raises:
+            AdbDeviceConnectError: 设备连接异常
             AdbTimeout:输入命令超时
         Returns:
             返回命令结果stdout
@@ -369,6 +368,11 @@ class ADBClient(object):
             stderr = stderr.decode(get_std_encoding(stderr))
 
         if proc.returncode > 0:
+            pattern = AdbDeviceConnectError.CONNECT_ERROR
+            if isinstance(stderr, bytes):
+                pattern = pattern.encode("utf-8")
+            if re.search(pattern, stderr):
+                raise AdbDeviceConnectError(stderr)
             if not skip_error:
                 raise AdbError(stdout, stderr)
 

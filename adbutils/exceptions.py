@@ -39,6 +39,10 @@ class NoDeviceSpecifyError(AdbBaseError):
 
 class AdbDeviceConnectError(AdbBaseError):
     """ Failed to connect device """
+    CONNECT_ERROR = r"error:\s*(" \
+                    r"(device \'\S+\' not found)|" \
+                    r"(cannot connect to daemon at [\w\:\s\.]+ Connection timed out)|" \
+                    r"(device offline))"
 
 
 class AdbInstallError(AdbBaseError):
