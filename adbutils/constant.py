@@ -14,7 +14,9 @@ DEFAULT_ADB_PATH = {
 ANDROID_ADB_SERVER_HOST = '127.0.0.1'
 ANDROID_ADB_SERVER_PORT = 5037
 
-ADB_CAP_REMOTE_PATH = '/data/local/tmp/screencap.raw'
+ANDROID_TMP_PATH = '/data/local/tmp/'
+ADB_CAP_REMOTE_PATH = os.path.join(ANDROID_TMP_PATH, 'screencap.raw')
+
 ADB_CAP_LOCAL_PATH = './{device_id}.raw'
 
 ADB_DEFAULT_KEYBOARD = 'com.android.adbkeyboard/.AdbIME'
@@ -73,3 +75,10 @@ ADB_INSTALL_FAILED = {
     "Permission denied … sdcard …": "sdcard 不可用",
     "signatures do not match the previously installed version; ignoring!": "已安装该应用且签名不一致",
 }
+
+
+AAPT_LOCAL_PATH = {
+    'arm': os.path.join(STATICPATH, 'aapt', 'aapt-arm-pie'),
+    'x86': os.path.join(STATICPATH, 'aapt', 'aapt-x86-pie'),
+}
+AAPT_REMOTE_PATH = os.path.join(ANDROID_TMP_PATH, 'aapt')

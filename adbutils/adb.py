@@ -3,18 +3,20 @@ import subprocess
 import re
 import socket
 import os
+import time
 import warnings
 
 import numpy as np
 from baseImage import Rect, Point
 
-from adbutils._utils import (get_adb_exe, split_cmd, _popen_kwargs, get_std_encoding, check_file,
-                             NonBlockingStreamReader)
+from adbutils._utils import (get_adb_exe, split_cmd, _popen_kwargs, get_std_encoding, check_file)
 from adbutils.constant import (ANDROID_ADB_SERVER_HOST, ANDROID_ADB_SERVER_PORT, ADB_CAP_REMOTE_PATH,
                                ADB_CAP_LOCAL_PATH, IP_PATTERN, ADB_DEFAULT_KEYBOARD)
 from adbutils.exceptions import (AdbError, AdbShellError, AdbBaseError, AdbTimeout, NoDeviceSpecifyError,
                                  AdbDeviceConnectError, AdbInstallError, AdbSDKVersionError)
 from adbutils._wraps import retries
+from adbutils.extra import Aapt
+
 from typing import Union, List, Optional, Tuple, Dict, Match, Iterator
 
 
@@ -1044,7 +1046,7 @@ class ADBShell(ADBClient):
         ret = self.raw_shell(['getprop', key])
         return strip and ret.rstrip() or ret
 
-    def app_install_path(self, packageName: str) -> Optional[str]:
+    def get_app_install_path(self, packageName: str) -> Optional[str]:
         """
         command 'adb shell pm path <package>'
 
