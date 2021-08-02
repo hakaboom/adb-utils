@@ -1353,5 +1353,14 @@ class ADBExtraDevice(ADBDevice):
         from adbutils.extra import Minicap
         self.minicap = Minicap(device=self)
 
+        from adbutils.extra import Rotation
+        self.rotation_watcher = Rotation(device=self)
+        self.rotation_watcher.start()
+        self._register_rotation_watcher()
+
+    def _register_rotation_watcher(self):
+        if self.minicap:
+            self.rotation_watcher.reg_callback(lambda x: self.minicap.update_rotation(x * 90))
+
 
 __all__ = ['ADBClient', 'ADBDevice', 'ADBExtraDevice']
