@@ -17,11 +17,11 @@ from adbutils.exceptions import (AdbError, AdbShellError, AdbBaseError, AdbTimeo
 from adbutils._wraps import retries
 from adbutils.extra import Aapt
 
-from typing import Union, List, Optional, Tuple, Dict, Match, Iterator
+from typing import Union, List, Optional, Tuple, Dict, Match, Iterator, Final
 
 
 class ADBClient(object):
-    SUBPROCESS_FLAG = _popen_kwargs()['creationflags']
+    SUBPROCESS_FLAG: Final[str] = _popen_kwargs()['creationflags']
 
     def __init__(self, device_id: Optional[str] = None, adb_path: Optional[str] = None,
                  host: Optional[str] = ANDROID_ADB_SERVER_HOST,
@@ -412,7 +412,7 @@ class ADBClient(object):
 
 
 class ADBShell(ADBClient):
-    SHELL_ENCODING = 'utf-8'  # adb shell的编码
+    SHELL_ENCODING: Final[str] = 'utf-8'  # adb shell的编码
 
     @property
     def line_breaker(self) -> str:
@@ -1338,4 +1338,10 @@ class ADBDevice(ADBShell):
             self.shell(['input', 'keyevent', 'ENTER'])
 
 
-__all__ = ['ADBClient', 'ADBDevice']
+class ADBExtraDevice(ADBDevice):
+    def __init__(self, *args, **kwargs):
+        super(ADBExtraDevice, self).__init__(*args, **kwargs)
+        self.aapt = Aapt(device=self)
+
+
+__all__ = ['ADBClient', 'ADBDevice', 'ADBExtraDevice']
