@@ -23,7 +23,7 @@ class Aapt(object):
         """
         app_info = self._get_app_info(packageName)
         if app_info:
-            pattern = re.compile("application-label:\'(?P<label>.*)\'\s?")
+            pattern = re.compile("application-label:\'(?P<label>.*)\'\\s?")
             m = pattern.search(app_info)
             if m:
                 return m.group('label')
@@ -50,7 +50,7 @@ class Aapt(object):
         elif isinstance(flag_options, str):
             options += [flag_options]
         app_list = self.device.app_list(options)
-        pattern = re.compile('^(\S+)=(\S+)$')
+        pattern = re.compile('^(\\S+)=(\\S+)$')
         ret = []
         for app in app_list:
             m = pattern.findall(app)
@@ -61,7 +61,7 @@ class Aapt(object):
 
     def _install_aapt(self) -> None:
         """
-        push aapt to device
+        check if aapt installed
 
         Returns:
             None

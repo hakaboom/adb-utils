@@ -15,9 +15,10 @@ ANDROID_ADB_SERVER_HOST = '127.0.0.1'
 ANDROID_ADB_SERVER_PORT = 5037
 
 ANDROID_TMP_PATH = '/data/local/tmp/'
-ADB_CAP_REMOTE_PATH = os.path.join(ANDROID_TMP_PATH, 'screencap.raw')
+ADB_CAP_RAW_REMOTE_PATH = os.path.join(ANDROID_TMP_PATH, 'screencap.raw')
 
-ADB_CAP_LOCAL_PATH = './{device_id}.raw'
+ADB_CAP_RAW_LOCAL_PATH = './{device_id}.raw'
+ADB_CAP_LOCAL_PATH = './{device_id}.png'
 
 ADB_DEFAULT_KEYBOARD = 'com.android.adbkeyboard/.AdbIME'
 ADB_KEYBOARD_APK_PATH = os.path.join(STATICPATH, "ADBKeyboard.apk")
@@ -76,9 +77,25 @@ ADB_INSTALL_FAILED = {
     "signatures do not match the previously installed version; ignoring!": "已安装该应用且签名不一致",
 }
 
-
+# AAPT
 AAPT_LOCAL_PATH = {
     'arm': os.path.join(STATICPATH, 'aapt', 'aapt-arm-pie'),
     'x86': os.path.join(STATICPATH, 'aapt', 'aapt-x86-pie'),
 }
 AAPT_REMOTE_PATH = os.path.join(ANDROID_TMP_PATH, 'aapt')
+
+
+# minicap
+MNC_REMOTE_PATH = os.path.join(ANDROID_TMP_PATH, 'minicap')
+MNC_SO_REMOTE_PATH = os.path.join(ANDROID_TMP_PATH, 'minicap.so')
+MNC_CMD = f'LD_LIBRARY_PATH={ANDROID_TMP_PATH} {MNC_REMOTE_PATH}'
+MNC_CAP_LOCAL_PATH = ADB_CAP_LOCAL_PATH
+MNC_LOCAL_NAME = 'minicap_{device_id}'
+MNC_LOCAL_PATH = os.path.join(STATICPATH, 'stf_libs', '{abi_version}', 'minicap')
+MNC_SO_LOCAL_PATH = os.path.join(STATICPATH, 'stf_libs', 'minicap-shared', 'aosp', 'libs',
+                                   'android-{sdk_version}', '{abi_version}', 'minicap.so')
+
+# minitouch
+MNT_REMOTE_PATH = os.path.join(ANDROID_TMP_PATH, 'minitouch')
+MNT_LOCAL_NAME = 'minitouch_{device_id}'
+MNT_LOCAL_PATH = os.path.join(STATICPATH, 'stf_libs', '{abi_version}', 'minitouch')

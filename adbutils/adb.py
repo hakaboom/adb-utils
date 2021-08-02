@@ -10,18 +10,18 @@ import numpy as np
 from baseImage import Rect, Point
 
 from adbutils._utils import (get_adb_exe, split_cmd, _popen_kwargs, get_std_encoding, check_file)
-from adbutils.constant import (ANDROID_ADB_SERVER_HOST, ANDROID_ADB_SERVER_PORT, ADB_CAP_REMOTE_PATH,
-                               ADB_CAP_LOCAL_PATH, IP_PATTERN, ADB_DEFAULT_KEYBOARD)
+from adbutils.constant import (ANDROID_ADB_SERVER_HOST, ANDROID_ADB_SERVER_PORT, ADB_CAP_RAW_REMOTE_PATH,
+                               ADB_CAP_RAW_LOCAL_PATH, IP_PATTERN, ADB_DEFAULT_KEYBOARD)
 from adbutils.exceptions import (AdbError, AdbShellError, AdbBaseError, AdbTimeout, NoDeviceSpecifyError,
                                  AdbDeviceConnectError, AdbInstallError, AdbSDKVersionError)
 from adbutils._wraps import retries
-from adbutils.extra import Aapt
+from loguru import logger
 
 from typing import Union, List, Optional, Tuple, Dict, Match, Iterator, Final
 
 
 class ADBClient(object):
-    SUBPROCESS_FLAG: Final[str] = _popen_kwargs()['creationflags']
+    SUBPROCESS_FLAG: Final[int] = _popen_kwargs()['creationflags']
 
     def __init__(self, device_id: Optional[str] = None, adb_path: Optional[str] = None,
                  host: Optional[str] = ANDROID_ADB_SERVER_HOST,
@@ -67,7 +67,7 @@ class ADBClient(object):
         :return: adb server版本
         """
         ret = self.cmd('version', devices=False)
-        pattern = re.compile('Android Debug Bridge version \d.\d.(\d+)')
+        pattern = re.compile(r'Android Debug Bridge version \d.\d.(\d+)')
         version = pattern.findall(ret)
         if version:
             return int(version[0])
@@ -80,7 +80,7 @@ class ADBClient(object):
         Returns:
             devices dict key[device_name]-value[device_state]
         """
-        pattern = re.compile('([\S]+)\t([\w]+)\n?')
+        pattern = re.compile(r'([\S]+)\t([\w]+)\n?')
         ret = self.cmd("devices", devices=False)
         return {value[0]: value[1] for value in pattern.findall(ret)}
 
@@ -173,7 +173,7 @@ class ADBClient(object):
             forwards dict key[device_name]-value[Tuple[local, remote]]
         """
         forwards = {}
-        pattern = re.compile('([\S]+)\s([\S]+)\s([\S]+)\n?')
+        pattern = re.compile(r'([\S]+)\s([\S]+)\s([\S]+)\n?')
         ret = self.cmd(['forward', '--list'], devices=False, skip_error=True)
         for value in pattern.findall(ret):
             if device_id and device_id != value[0]:
@@ -199,7 +199,7 @@ class ADBClient(object):
                 for _local, _remote in value:
                     if _remote == remote:
                         #  解析local
-                        pattern = re.compile('tcp:(\d+)')
+                        pattern = re.compile(r'tcp:(\d+)')
                         ret = pattern.findall(_local)
                         if ret:
                             return int(ret[0])
@@ -287,7 +287,7 @@ class ADBClient(object):
         stdout = stdout.decode(get_std_encoding(stdout))
         stderr = stderr.decode(get_std_encoding(stdout))
 
-        pattern = re.compile("Failure \[(.+):.+\]")
+        pattern = re.compile(r"Failure \[(.+):.+\]")
         if proc.returncode == 0:
             return True
         elif pattern.search(stderr):
@@ -354,13 +354,14 @@ class ADBClient(object):
         Returns:
             返回命令结果stdout
         """
+
         proc = self.start_cmd(cmds, devices)
         if timeout and isinstance(timeout, int):
             try:
                 stdout, stderr = proc.communicate(timeout=timeout)
             except subprocess.TimeoutExpired:
                 proc.kill()
-                stdout, stderr = proc.communicate()
+                _, stderr = proc.communicate()
                 raise AdbTimeout(f"cmd command {' '.join(proc.args)} time out")
         else:
             stdout, stderr = proc.communicate()
@@ -401,6 +402,7 @@ class ADBClient(object):
             cmd_options = self.cmd_options
 
         cmds = cmd_options + cmds
+        logger.info(' '.join(cmds))
         proc = subprocess.Popen(
             cmds,
             stdin=subprocess.PIPE,
@@ -442,7 +444,7 @@ class ADBShell(ADBClient):
             单位MB
         """
         ret = self.shell(['dumpsys', 'meminfo'])
-        pattern = re.compile('.*Total RAM:\s+(\S+)\s+', re.DOTALL)
+        pattern = re.compile(r'.*Total RAM:\s+(\S+)\s+', re.DOTALL)
         m = pattern.search(ret)
         if m:
             memory = pattern.search(ret).group(1)
@@ -789,7 +791,7 @@ class ADBShell(ADBClient):
         Returns:
             True屏幕打开/False屏幕关闭
         """
-        pattern = re.compile('mScreenOnFully=(?P<Bool>true|false)')
+        pattern = re.compile(r'mScreenOnFully=(?P<Bool>true|false)')
         ret = self.shell(['dumpsys', 'window', 'policy'])
         m = pattern.search(ret)
         if m:
@@ -806,7 +808,7 @@ class ADBShell(ADBClient):
             True屏幕锁定/False屏幕未锁定
         """
         ret = self.shell('dumpsys window policy')
-        pattern = re.compile('(?:mShowingLockscreen|isStatusBarKeyguard|showing)=(?P<Bool>true|false)')
+        pattern = re.compile(r'(?:mShowingLockscreen|isStatusBarKeyguard|showing)=(?P<Bool>true|false)')
         m = pattern.search(ret)
         if m:
             return m.group('Bool') == 'true'
@@ -825,7 +827,7 @@ class ADBShell(ADBClient):
         cmds = ['dumpsys', 'activity', 'activities']
         activities = self.shell(cmds)
         # 获取Stack
-        pattern = re.compile('Stack #([\d+]):')
+        pattern = re.compile(r'Stack #([\d+]):')
         stack = pattern.findall(activities)
         if not stack:
             # TODO: 好像不可能获取不到,没获取到直接弹异常
@@ -833,7 +835,7 @@ class ADBShell(ADBClient):
         stack.sort()
         # 根据Stack拆分running activities
         for index in stack:
-            pattern = re.compile(f'Stack #{index}[\s\S]+?Running activities \(most recent first\):([\s\S]+?)\r\n\r\n')
+            pattern = re.compile(rf'Stack #{index}[\s\S]+?Running activities \(most recent first\):([\s\S]+?)\r\n\r\n')
             ret = pattern.findall(activities)
             if ret:
                 running_activities.append(ret[0])
@@ -843,8 +845,8 @@ class ADBShell(ADBClient):
             return None
         activities = running_activities[stack_index]
         pattern = re.compile(
-            "TaskRecord[\s\S]+?Run #(?P<index>[\d+]):[\s]?"
-            "ActivityRecord\{(?P<memory>.*) (?P<user>.*) (?P<packageName>.*)/\.?(?P<activity>.*) (?P<task>.*)}")
+            r"TaskRecord[\s\S]+?Run #(?P<index>[\d+]):[\s]?"
+            r"ActivityRecord\{(?P<memory>.*) (?P<user>.*) (?P<packageName>.*)/\.?(?P<activity>.*) (?P<task>.*)}")
         ret = pattern.finditer(activities)
         if ret:
             return ret
@@ -862,8 +864,8 @@ class ADBShell(ADBClient):
         cmds = ['dumpsys', 'activity', 'activities']
         ret = self.shell(cmds)
         pattern = re.compile(
-            f'{key}: '
-            'ActivityRecord\{(?P<memory>.*) (?P<user>.*) (?P<packageName>.*)/\.?(?P<activity>.*) (?P<task>.*)}[\n\r]')
+            rf'{key}: '
+            r'ActivityRecord\{(?P<memory>.*) (?P<user>.*) (?P<packageName>.*)/\.?(?P<activity>.*) (?P<task>.*)}[\n\r]')
         m = pattern.search(ret)
         if m:
             return m
@@ -929,7 +931,7 @@ class ADBShell(ADBClient):
 
         """
         phyDispRE = re.compile(
-            '.*PhysicalDisplayInfo{(?P<width>\d+) x (?P<height>\d+), .*, density (?P<density>[\d.]+).*')
+            r'.*PhysicalDisplayInfo{(?P<width>\d+) x (?P<height>\d+), .*, density (?P<density>[\d.]+).*')
         ret = self.raw_shell('dumpsys display')
         m = phyDispRE.search(ret)
         if m:
@@ -944,7 +946,7 @@ class ADBShell(ADBClient):
         # This could also be mSystem or mOverscanScreen
         phyDispRE = re.compile('\s*mUnrestrictedScreen=\((?P<x>\d+),(?P<y>\d+)\) (?P<width>\d+)x(?P<height>\d+)')
         # This is known to work on older versions (i.e. API 10) where mrestrictedScreen is not available
-        dispWHRE = re.compile('\s*DisplayWidth=(?P<width>\d+) *DisplayHeight=(?P<height>\d+)')
+        dispWHRE = re.compile(r'\s*DisplayWidth=(?P<width>\d+) *DisplayHeight=(?P<height>\d+)')
         ret = self.raw_shell('dumpsys window')
         m = phyDispRE.search(ret, 0)
         if not m:
@@ -963,7 +965,7 @@ class ADBShell(ADBClient):
             return displayInfo
 
         # gets C{mPhysicalDisplayInfo} values from dumpsys. This is a method to obtain display dimensions and density
-        phyDispRE = re.compile('Physical size: (?P<width>\d+)x(?P<height>\d+).*Physical density: (?P<density>\d+)',
+        phyDispRE = re.compile(r'Physical size: (?P<width>\d+)x(?P<height>\d+).*Physical density: (?P<density>\d+)',
                                re.S)
         ret = self.raw_shell('wm size; wm density')
         m = phyDispRE.search(ret)
@@ -1004,7 +1006,7 @@ class ADBShell(ADBClient):
 
         """
         # another way to get orientation, for old sumsung device(sdk version 15)
-        SurfaceFlingerRE = re.compile('orientation=(\d+)')
+        SurfaceFlingerRE = re.compile(r'orientation=(\d+)')
         ret = self.shell('dumpsys SurfaceFlinger')
         m = SurfaceFlingerRE.search(ret)
         if m:
@@ -1012,7 +1014,7 @@ class ADBShell(ADBClient):
 
         # Fallback method to obtain the orientation
         # See https://github.com/dtmilano/AndroidViewClient/issues/128
-        surfaceOrientationRE = re.compile('SurfaceOrientation:\s+(\d+)')
+        surfaceOrientationRE = re.compile(r'SurfaceOrientation:\s+(\d+)')
         ret = self.shell('dumpsys input')
         m = surfaceOrientationRE.search(ret)
         if m:
@@ -1155,6 +1157,10 @@ class ADBShell(ADBClient):
         except UnicodeDecodeError:
             return str(repr(stdout))
 
+    def start_shell(self, cmds: Union[list, str]):
+        cmds = ['shell'] + split_cmd(cmds)
+        return self.start_cmd(cmds)
+
 
 class ADBDevice(ADBShell):
     """ 操作类的函数都会放这里 """
@@ -1172,11 +1178,11 @@ class ADBDevice(ADBShell):
         Returns:
             图像数据
         """
-        remote_path = ADB_CAP_REMOTE_PATH
-        raw_local_path = ADB_CAP_LOCAL_PATH.format(device_id=self.get_device_id(True))
+        remote_path = ADB_CAP_RAW_REMOTE_PATH
+        raw_local_path = ADB_CAP_RAW_LOCAL_PATH.format(device_id=self.get_device_id(True))
 
         self.raw_shell(['screencap', remote_path])
-        self.start_cmd(['chmod', '755', remote_path])
+        self.start_shell(['chmod', '755', remote_path])
         self.pull(local=raw_local_path, remote=remote_path)
 
         # read size
@@ -1341,7 +1347,11 @@ class ADBDevice(ADBShell):
 class ADBExtraDevice(ADBDevice):
     def __init__(self, *args, **kwargs):
         super(ADBExtraDevice, self).__init__(*args, **kwargs)
+        from adbutils.extra import Aapt
         self.aapt = Aapt(device=self)
+
+        from adbutils.extra import Minicap
+        self.minicap = Minicap(device=self)
 
 
 __all__ = ['ADBClient', 'ADBDevice', 'ADBExtraDevice']

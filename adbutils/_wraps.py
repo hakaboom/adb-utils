@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import time
+import threading
 from inspect import isfunction
 from functools import wraps
 from typing import Optional, Union, Tuple, List, Type
@@ -52,3 +53,35 @@ class retries(object):
                     else:
                         raise err
         return wrapped_function
+
+
+class ThreadSafeIter:
+    """
+    Takes an iterator/generator and makes it thread-safe by
+    serializing call to the `next` method of given iterator/generator.
+    """
+    def __init__(self, it):
+        self.it = it
+        self.lock = threading.Lock()
+        self._next = self.it.__next__  # py3
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        with self.lock:
+            return self._next()
+
+    def send(self, *args):
+        with self.lock:
+            return self.it.send(*args)
+
+
+def threadsafe_generator(func):
+    """
+    A decorator that takes a generator function and makes it thread-safe.
+    """
+    @wraps(func)
+    def wrapped_function(*a, **kw):
+        return ThreadSafeIter(func(*a, **kw))
+    return wrapped_function
