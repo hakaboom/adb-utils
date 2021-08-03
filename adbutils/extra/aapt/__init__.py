@@ -67,6 +67,9 @@ class Aapt(object):
             None
         """
         if not self.device.check_file(ANDROID_TMP_PATH, 'aapt'):
-            self.device.push(local=AAPT_LOCAL_PATH.get(self.device.abi_version), remote=AAPT_REMOTE_PATH)
+            if 'arm' in self.device.abi_version:
+                self.device.push(local=AAPT_LOCAL_PATH['arm'], remote=AAPT_REMOTE_PATH)
+            else:
+                self.device.push(local=AAPT_LOCAL_PATH['x86'], remote=AAPT_REMOTE_PATH)
             time.sleep(1)
             self.device.shell(['chmod', '755', AAPT_REMOTE_PATH])

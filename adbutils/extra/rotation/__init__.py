@@ -34,7 +34,7 @@ class Rotation(object):
                 for callback in self.ow_callback:
                     try:
                         callback(ori)
-                    except:
+                    except Exception:
                         logger.error('callback: {} error'.format(callback))
                         traceback.print_exc()
 

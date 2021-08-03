@@ -28,7 +28,7 @@ class Minicap(object):
         if rotation_watcher:
             rotation_watcher.reg_callback(lambda x: self.update_rotation(x * 90))
         self._install_minicap()
-        self.start_server()
+        # self.start_server()
 
     def start_server(self) -> None:
         """
@@ -39,9 +39,7 @@ class Minicap(object):
         Returns:
             None
         """
-        self.MNC_PORT = self.device.get_available_forward_local()
-        self.device.forward(local=f'tcp:{self.MNC_PORT}',
-                            remote=f'localabstract:{self.MNC_LOCAL_NAME}')
+        self._set_minicap_forward()
         param = self._get_params()
         proc = self.device.start_shell([MNC_CMD, f"-n '{self.MNC_LOCAL_NAME}'", '-P',
                                         "%dx%d@%dx%d/%d 2>&1" % param])
@@ -62,6 +60,18 @@ class Minicap(object):
         self.proc = proc
         self.nbsp = nbsp
         logger.info(f"port={self.MNC_PORT}")
+
+    def _set_minicap_forward(self):
+        """
+        设置minicap开放的端口
+
+        Returns:
+            None
+        """
+        # teardown服务后,保留端口信息,用于下次启动
+        self.MNC_PORT = self.MNC_PORT or self.device.get_available_forward_local()
+        self.device.forward(local=f'tcp:{self.MNC_PORT}',
+                            remote=f'localabstract:{self.MNC_LOCAL_NAME}')
 
     def _install_minicap(self) -> None:
         """
