@@ -55,3 +55,7 @@ class AdbInstallError(AdbBaseError):
             return ADB_INSTALL_FAILED[self.message]
         else:
             return f'adb install failed,\n{self.message}'
+
+
+class AdbExtraModuleNotFount(AdbBaseError):
+    """ An error while adb extra-module not found"""

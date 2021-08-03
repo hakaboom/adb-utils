@@ -30,6 +30,7 @@ class Aapt(object):
 
     def _get_app_info(self, packageName: str):
         app_path = self.device.get_app_install_path(packageName)
+        # badging: Print the label and icon for the app declared in APK.
         ret = self.device.shell(f'{AAPT_REMOTE_PATH} d badging {app_path}')
         return ret
 

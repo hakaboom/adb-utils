@@ -13,7 +13,7 @@ from adbutils._utils import (get_adb_exe, split_cmd, _popen_kwargs, get_std_enco
 from adbutils.constant import (ANDROID_ADB_SERVER_HOST, ANDROID_ADB_SERVER_PORT, ADB_CAP_RAW_REMOTE_PATH,
                                ADB_CAP_RAW_LOCAL_PATH, IP_PATTERN, ADB_DEFAULT_KEYBOARD)
 from adbutils.exceptions import (AdbError, AdbShellError, AdbBaseError, AdbTimeout, NoDeviceSpecifyError,
-                                 AdbDeviceConnectError, AdbInstallError, AdbSDKVersionError)
+                                 AdbDeviceConnectError, AdbInstallError, AdbSDKVersionError, AdbExtraModuleNotFount)
 from adbutils._wraps import retries
 from loguru import logger
 
@@ -1163,8 +1163,6 @@ class ADBShell(ADBClient):
 
 
 class ADBDevice(ADBShell):
-    """ 操作类的函数都会放这里 """
-
     def screenshot(self, rect: Union[Rect, Tuple[int, int, int, int], List[int]] = None) -> np.ndarray:
         """
         command 'adb screencap'
@@ -1345,23 +1343,46 @@ class ADBDevice(ADBShell):
 
 
 class ADBExtraDevice(ADBDevice):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, aapt: bool = True, minicap: bool = True,
+                 *args, **kwargs):
+        """
+        添加了额外模块的adb
+
+        Args:
+            aapt: Android资源打包工具,可以用于解析apk
+            minicap: Android流式传输实时屏幕捕获数据
+        """
         super(ADBExtraDevice, self).__init__(*args, **kwargs)
-        from adbutils.extra import Aapt
-        self.aapt = Aapt(device=self)
+        if aapt:
+            from adbutils.extra import Aapt
+            self.aapt = Aapt(device=self)
+            self._aapt_flag = True
+        else:
+            self._aapt_flag = False
 
-        from adbutils.extra import Rotation
-        self.rotation_watcher = Rotation(device=self)
-        self.rotation_watcher.start()
+        if minicap:
+            from adbutils.extra import Rotation
+            self.rotation_watcher = Rotation(device=self)
+            self.rotation_watcher.start()
 
-        from adbutils.extra import Minicap
-        self.minicap = Minicap(device=self, rotation_watcher=self.rotation_watcher)
+            from adbutils.extra import Minicap
+            self.minicap = Minicap(device=self, rotation_watcher=self.rotation_watcher)
+            self._minicap_flag = True
+        else:
+            self._minicap_flag = False
 
-    #     self._register_rotation_watcher()
-    #
-    # def _register_rotation_watcher(self):
-    #     if self.minicap:
-    #         self.rotation_watcher.reg_callback(lambda x: self.minicap.update_rotation(x * 90))
+    def __getattribute__(self, item):
+        """
+        用于隔离自定义模块未创建时的报错
+
+        Args:
+            item: 当前访问的属性
+        """
+        if item == 'minicap' and not self._minicap_flag:
+            raise AdbExtraModuleNotFount('minicap not create, Call minicap = True at instance time')
+        elif item == 'aapt' and not self._aapt_flag:
+            raise AdbExtraModuleNotFount('aapt not create， Call aapt = True at instance time')
+        return object.__getattribute__(self, item)
 
 
 __all__ = ['ADBClient', 'ADBDevice', 'ADBExtraDevice']

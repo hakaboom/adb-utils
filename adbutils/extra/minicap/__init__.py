@@ -18,6 +18,13 @@ class Minicap(object):
     RECVTIMEOUT = None
 
     def __init__(self, device: ADBDevice, rotation_watcher=None):
+        """
+        初始化minicap
+
+        Args:
+            device: 设备类
+            rotation_watcher: 方向监控函数
+        """
         self.device = device
         self.MNC_LOCAL_NAME = MNC_LOCAL_NAME.format(device_id=self.device.device_id)
         self.MNC_PORT = 0
@@ -57,8 +64,8 @@ class Minicap(object):
             raise RuntimeError('minicap server quit immediately')
         reg_cleanup(proc.kill)
         time.sleep(.5)
-        self.proc = proc
-        self.nbsp = nbsp
+        # self.proc = proc
+        # self.nbsp = nbsp
         logger.info(f"port={self.MNC_PORT}")
 
     def _set_minicap_forward(self):
@@ -126,10 +133,25 @@ class Minicap(object):
         self.device.remove_forward(local=f'tcp:{self.MNC_PORT}')
 
     def update_rotation(self, rotation):
+        """
+        更新屏幕方向
+
+        Args:
+            rotation: 方向角度
+
+        Returns:
+            None
+        """
         logger.debug("minicap update_rotation: {}", rotation)
         self._update_rotation_event.set()
 
     def get_frame(self):
+        """
+        获取屏幕截图
+
+        Returns:
+            图像数据
+        """
         if self._update_rotation_event.is_set():
             logger.info('minicap update_rotation')
             self.teardown()

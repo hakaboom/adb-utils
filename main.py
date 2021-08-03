@@ -2,10 +2,9 @@
 python setup.py sdist
 twine upload dist/*
 """
-# from adbutils import ADBExtraDevice
-# from baseImage import IMAGE
-# import cv2
-#
-# device = ADBExtraDevice(device_id='192.168.0.107:5555')
-# # for i in device.app_list(['-3', '-f']):
-# #     print(i)
+from adbutils import ADBExtraDevice
+
+device = ADBExtraDevice(device_id='emulator-5554')
+device.minicap.start_server()
+device.minicap.get_frame()
+device.minicap.teardown()
