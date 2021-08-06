@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from adbutils.constant import AAPT_LOCAL_PATH, AAPT_REMOTE_PATH, ANDROID_TMP_PATH
 
-from typing import Union, Tuple, List
+from typing import Union, Tuple, List, Optional, Match, Dict
 import re
 import time
 
@@ -11,7 +11,57 @@ class Aapt(object):
         self.device = device
         self._install_aapt()
 
-    def get_app_name(self, packageName: str):
+    def get_app_info(self, packageName: str) -> Dict[str, str]:
+        """
+        获取app信息
+
+        Args:
+            packageName: app包名
+
+        Returns:
+            app信息, 包含package_name、versionCode、versionName、sdkVersion、targetSdkVersion、app_name、launchable_activity
+        """
+        app_info = self._get_app_info(packageName)
+        if m := self._parse_app_info(app_info):
+            return {
+                'package_name': m.group('package_name'),
+                'versionCode': m.group('versionCode'),
+                'versionName': m.group('versionName'),
+                'sdkVersion': m.group('sdkVersion'),
+                'targetSdkVersion': m.group('targetSdkVersion'),
+                'app_name': m.group('app_name'),
+                'launchable_activity': m.group('launchable_activity'),
+            }
+
+    def get_app_versionName(self, packageName: str) -> Optional[str]:
+        """
+        获取app应用程序的版本号
+
+        Args:
+            packageName: app包名
+
+        Returns:
+            app versionName
+        """
+        app_info = self._get_app_info(packageName)
+        if m := self._parse_app_info(app_info):
+            return m.group('versionName')
+
+    def get_app_versionCode(self, packageName: str) -> Optional[str]:
+        """
+        获取app应用程序的内部版本号
+
+        Args:
+            packageName: app包名
+
+        Returns:
+            app versionCode
+        """
+        app_info = self._get_app_info(packageName)
+        if m := self._parse_app_info(app_info):
+            return m.group('versionCode')
+
+    def get_app_name(self, packageName: str) -> Optional[str]:
         """
         获取app应用名称
 
@@ -22,13 +72,73 @@ class Aapt(object):
             app name
         """
         app_info = self._get_app_info(packageName)
-        if app_info:
-            pattern = re.compile("application-label:\'(?P<label>.*)\'\\s?")
-            m = pattern.search(app_info)
-            if m:
-                return m.group('label')
+        if m := self._parse_app_info(app_info):
+            return m.group('app_name')
 
-    def _get_app_info(self, packageName: str):
+    def get_app_sdkVersion(self, packageName: str) -> Optional[str]:
+        """
+        获取app sdk版本
+
+        Args:
+            packageName: app包名
+
+        Returns:
+            app sdkVersion
+        """
+        app_info = self._get_app_info(packageName)
+        if m := self._parse_app_info(app_info):
+            return m.group('sdkVersion')
+
+    def get_app_targetSdkVersion(self, packageName: str) -> Optional[str]:
+        """
+        获取app targetSdk版本
+
+        Args:
+            packageName: app包名
+
+        Returns:
+            app targetSdkVersion
+        """
+        app_info = self._get_app_info(packageName)
+        if m := self._parse_app_info(app_info):
+            return m.group('targetSdkVersion')
+
+    def get_app_launchableActivity(self, packageName: str):
+        """
+        获取app应用名称launchable_activity
+
+        Args:
+            packageName: app包名
+
+        Returns:
+            launchable_activity
+        """
+        app_info = self._get_app_info(packageName)
+        if m := self._parse_app_info(app_info):
+            return m.group('launchable_activity')
+
+    @staticmethod
+    def _parse_app_info(app_info) -> Optional[Match[str]]:
+        """
+        解析aapt d badging获取到的应用信息
+
+        Args:
+            app_info: aapt获取到的应用信息
+
+        Returns:
+
+        """
+        pattern = re.compile(r'package: name=\'(?P<package_name>.*)\' '
+                             r'versionCode=\'(?P<versionCode>.*)\' '
+                             r'versionName=\'(?P<versionName>.*)\' platformBuildVersionName='
+                             r'.*sdkVersion:\'(?P<sdkVersion>.\d+)\''
+                             r'.*targetSdkVersion:\'(?P<targetSdkVersion>.\d+)\''
+                             r'.*application: label=\'(?P<app_name>.*)\' icon='
+                             r'.*launchable-activity: name=\'(?P<launchable_activity>.*)\'  label=', re.DOTALL)
+        m = pattern.search(app_info)
+        return m if m else None
+
+    def _get_app_info(self, packageName: str) -> Optional[str]:
         app_path = self.device.get_app_install_path(packageName)
         # badging: Print the label and icon for the app declared in APK.
         ret = self.device.shell(f'{AAPT_REMOTE_PATH} d badging {app_path}')
