@@ -68,8 +68,7 @@ class ADBClient(object):
         """
         ret = self.cmd('version', devices=False)
         pattern = re.compile(r'Android Debug Bridge version \d.\d.(\d+)')
-        version = pattern.findall(ret)
-        if version:
+        if version := pattern.findall(ret):
             return int(version[0])
 
     @property
@@ -445,21 +444,20 @@ class ADBShell(ADBClient):
         """
         ret = self.shell(['dumpsys', 'meminfo'])
         pattern = re.compile(r'.*Total RAM:\s+(\S+)\s+', re.DOTALL)
-        m = pattern.search(ret)
-        if m:
-            memory = pattern.search(ret).group(1)
+        if m := pattern.search(ret):
+            memory = m.group(1)
         else:
             raise AdbBaseError(ret)
 
         if ',' in memory:
             memory = memory.split(',')
             # GB: memory[0], MB: memory[1], KB: memory[2]
-            memory = int(int(memory[0]) * 1000) + int(memory[1])
+            memory = int(int(memory[0]) * 1024) + int(memory[1])
         else:
             memory = round(memory / 1024)
-
         return f'{str(memory)}MB'
 
+    @property
     def cpu_coreNum(self) -> Optional[int]:
         """
         获取cpu核心数量
@@ -468,8 +466,7 @@ class ADBShell(ADBClient):
             cpu核心数量
         """
         ret = self.shell("cat /proc/cpuinfo").strip()
-        cpuNum = ret.count('processor')
-        if cpuNum:
+        if cpuNum := ret.count('processor'):
             return int(cpuNum)
         else:
             return None
@@ -482,8 +479,7 @@ class ADBShell(ADBClient):
         Returns:
             最高频率
         """
-        ret = self.shell("cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq")
-        if ret:
+        if ret := self.shell("cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq"):
             return int(int(ret) / 1000)
 
     @property
@@ -494,8 +490,7 @@ class ADBShell(ADBClient):
         Returns:
             最低频率
         """
-        ret = self.shell("cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_min_freq")
-        if ret:
+        if ret := self.shell("cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_min_freq"):
             return int(int(ret) / 1000)
 
     @property
@@ -506,8 +501,7 @@ class ADBShell(ADBClient):
         Returns:
             当前频率
         """
-        ret = self.shell("cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_cur_freq")
-        if ret:
+        if ret := self.shell("cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_cur_freq"):
             return int(int(ret) / 1000)
 
     @property
@@ -517,8 +511,8 @@ class ADBShell(ADBClient):
         Returns:
             cpu构建
         """
-        res = self.shell("getprop ro.product.cpu.abi")
-        return res.strip()
+        if ret := self.shell("getprop ro.product.cpu.abi"):
+            return ret.strip()
 
     @property
     def model(self) -> str:
@@ -549,8 +543,7 @@ class ADBShell(ADBClient):
             安卓版本
         """
         if not hasattr(self, '_android_version'):
-            sdk = self.getprop('ro.build.version.release')
-            setattr(self, '_android_version', sdk)
+            setattr(self, '_android_version', self.getprop('ro.build.version.release'))
             return self.android_version
         else:
             return getattr(self, '_android_version')
@@ -564,8 +557,7 @@ class ADBShell(ADBClient):
             sdk版本号
         """
         if not hasattr(self, '_sdk_version'):
-            sdk = self.getprop('ro.build.version.sdk')
-            setattr(self, '_sdk_version', int(sdk))
+            setattr(self, '_sdk_version', int(self.getprop('ro.build.version.sdk')))
             return self.sdk_version
         else:
             return getattr(self, '_sdk_version')
@@ -579,8 +571,7 @@ class ADBShell(ADBClient):
             abi版本
         """
         if not hasattr(self, '_abi_version'):
-            adi = self.getprop('ro.product.cpu.abi')
-            setattr(self, '_abi_version', adi)
+            setattr(self, '_abi_version', self.getprop('ro.product.cpu.abi'))
             return self.abi_version
         else:
             return getattr(self, '_abi_version')
@@ -606,8 +597,7 @@ class ADBShell(ADBClient):
 
     @property
     def dpi(self) -> int:
-        ret = self.getprop('ro.sf.lcd_density', True)
-        if ret:
+        if ret := self.getprop('ro.sf.lcd_density', True):
             return int(ret)
 
     @property
@@ -618,8 +608,7 @@ class ADBShell(ADBClient):
         Returns:
             屏幕方向 0/1/2
         """
-        orientation = self.getDisplayOrientation()
-        return orientation
+        return self.getDisplayOrientation()
 
     @property
     def ip_address(self) -> Optional[str]:
@@ -636,8 +625,7 @@ class ADBShell(ADBClient):
                 res = self.shell(f'ip -f inet addr show {interface}')
             except AdbShellError:
                 res = ''
-            matcher = re.search(r"inet (?P<ip>(\d+\.){3}\d+)", res)
-            if matcher:
+            if matcher := re.search(r"inet (?P<ip>(\d+\.){3}\d+)", res):
                 return matcher.group('ip')
 
             # android >= 6.0 backup method: ifconfig
@@ -645,8 +633,7 @@ class ADBShell(ADBClient):
                 res = self.shell('ifconfig')
             except AdbShellError:
                 res = ''
-            matcher = re.search(interface + r'.*?inet addr:((\d+\.){3}\d+)', res, re.DOTALL)
-            if matcher:
+            if matcher := re.search(interface + r'.*?inet addr:((\d+\.){3}\d+)', res, re.DOTALL):
                 return matcher.group(1)
 
             # android <= 6.0: netcfg
@@ -654,8 +641,7 @@ class ADBShell(ADBClient):
                 res = self.shell('netcfg')
             except AdbShellError:
                 res = ''
-            matcher = re.search(interface + r'.* ((\d+\.){3}\d+)/\d+', res)
-            if matcher:
+            if matcher := re.search(interface + r'.* ((\d+\.){3}\d+)/\d+', res):
                 return matcher.group(1)
 
             # android <= 6.0 backup method: getprop dhcp.{}.ipaddress
@@ -663,8 +649,7 @@ class ADBShell(ADBClient):
                 res = self.shell('getprop dhcp.{}.ipaddress'.format(interface))
             except AdbShellError:
                 res = ''
-            matcher = IP_PATTERN.search(res)
-            if matcher:
+            if matcher := IP_PATTERN.search(res):
                 return matcher.group(0)
 
             # sorry, no more methods...
@@ -675,7 +660,6 @@ class ADBShell(ADBClient):
             ip = get_ip_address_from_interface(i)
             if ip and not ip.startswith('172.') and not ip.startswith('127.') and not ip.startswith('169.'):
                 return ip
-
         return None
 
     @property
@@ -688,8 +672,7 @@ class ADBShell(ADBClient):
         Returns:
             当前activity
         """
-        m = self._get_activityRecord(key='mResumedActivity')
-        if m:
+        if m := self._get_activityRecord(key='mResumedActivity'):
             return m.group('activity')
         else:
             raise AdbBaseError(f'get foreground_activity unknown error: {m}')
@@ -704,8 +687,7 @@ class ADBShell(ADBClient):
         Returns:
             当前包名
         """
-        m = self._get_activityRecord(key='mResumedActivity')
-        if m:
+        if m := self._get_activityRecord(key='mResumedActivity'):
             return m.group('packageName')
         else:
             raise AdbBaseError(f'get foreground_package unknown error: {m}')
@@ -718,14 +700,7 @@ class ADBShell(ADBClient):
         Returns:
             所有正在运行的activity
         """
-        ret_list = []
-        activities = self._get_running_activities()
-        for match in activities:
-            ret_list.append(match.group('activity'))
-
-        # if ret_list:
-        #     list(set(ret_list))
-        return ret_list
+        return [match.group('activity') for match in self._get_running_activities()]
 
     @property
     def running_package(self) -> list:
@@ -735,14 +710,7 @@ class ADBShell(ADBClient):
         Returns:
             所有正在运行的包名
         """
-        ret_list = []
-        activities = self._get_running_activities()
-        for match in activities:
-            ret_list.append(match.group('packageName'))
-
-        if ret_list:
-            list(set(ret_list))
-        return ret_list
+        return [match.group('packageName') for match in self._get_running_activities()]
 
     @property
     def default_ime(self) -> str:
@@ -766,8 +734,7 @@ class ADBShell(ADBClient):
         Returns:
             输入法列表
         """
-        ret = self.shell(['ime', 'list', '-s'])
-        if ret:
+        if ret := self.shell(['ime', 'list', '-s']):
             return ret.split()
 
     def is_keyboard_shown(self) -> bool:
@@ -777,8 +744,8 @@ class ADBShell(ADBClient):
         Returns:
             True显示键盘/False未显示键盘
         """
-        ret = self.shell(['dumpsys', 'input_method'])
-        if ret:
+
+        if ret := self.shell(['dumpsys', 'input_method']):
             return 'mInputShown=true' in ret
         return False
 
@@ -793,8 +760,8 @@ class ADBShell(ADBClient):
         """
         pattern = re.compile(r'mScreenOnFully=(?P<Bool>true|false)')
         ret = self.shell(['dumpsys', 'window', 'policy'])
-        m = pattern.search(ret)
-        if m:
+
+        if m := pattern.search(ret):
             return m.group('Bool') == 'true'
         raise AdbBaseError('Could not determine screen ON state')
 
@@ -809,8 +776,8 @@ class ADBShell(ADBClient):
         """
         ret = self.shell('dumpsys window policy')
         pattern = re.compile(r'(?:mShowingLockscreen|isStatusBarKeyguard|showing)=(?P<Bool>true|false)')
-        m = pattern.search(ret)
-        if m:
+
+        if m := pattern.search(ret):
             return m.group('Bool') == 'true'
         raise AdbBaseError('Could not determine screen lock state')
 
@@ -847,8 +814,8 @@ class ADBShell(ADBClient):
         pattern = re.compile(
             r"TaskRecord[\s\S]+?Run #(?P<index>[\d+]):[\s]?"
             r"ActivityRecord\{(?P<memory>.*) (?P<user>.*) (?P<packageName>.*)/\.?(?P<activity>.*) (?P<task>.*)}")
-        ret = pattern.finditer(activities)
-        if ret:
+
+        if ret := pattern.finditer(activities):
             return ret
         else:
             return None
@@ -866,8 +833,8 @@ class ADBShell(ADBClient):
         pattern = re.compile(
             rf'{key}: '
             r'ActivityRecord\{(?P<memory>.*) (?P<user>.*) (?P<packageName>.*)/\.?(?P<activity>.*) (?P<task>.*)}[\n\r]')
-        m = pattern.search(ret)
-        if m:
+
+        if m := pattern.search(ret):
             return m
         else:
             return None
@@ -882,8 +849,7 @@ class ADBShell(ADBClient):
         Returns:
             return True if find, false otherwise
         """
-        app_list = self.app_list()
-        if package in app_list:
+        if package in self.app_list():
             return True
         return False
 
@@ -912,13 +878,11 @@ class ADBShell(ADBClient):
         pattern = re.compile(r'max ([0-9]+)')
         for i in ret:
             if i.find('0035') != -1:
-                ret = pattern.findall(i)
-                if ret:
+                if ret := pattern.findall(i):
                     max_x = int(ret[0])
 
             if i.find('0036') != -1:
-                ret = pattern.findall(i)
-                if ret:
+                if ret := pattern.findall(i):
                     max_y = int(ret[0])
         return max_x, max_y
 
@@ -933,8 +897,7 @@ class ADBShell(ADBClient):
         phyDispRE = re.compile(
             r'.*PhysicalDisplayInfo{(?P<width>\d+) x (?P<height>\d+), .*, density (?P<density>[\d.]+).*')
         ret = self.raw_shell('dumpsys display')
-        m = phyDispRE.search(ret)
-        if m:
+        if m := phyDispRE.search(ret):
             displayInfo = {}
             for prop in ['width', 'height']:
                 displayInfo[prop] = int(m.group(prop))
@@ -968,8 +931,8 @@ class ADBShell(ADBClient):
         phyDispRE = re.compile(r'Physical size: (?P<width>\d+)x(?P<height>\d+).*Physical density: (?P<density>\d+)',
                                re.S)
         ret = self.raw_shell('wm size; wm density')
-        m = phyDispRE.search(ret)
-        if m:
+
+        if m := phyDispRE.search(ret):
             displayInfo = {}
             for prop in ['width', 'height']:
                 displayInfo[prop] = int(m.group(prop))
@@ -989,11 +952,11 @@ class ADBShell(ADBClient):
             display density
         """
         BASE_DPI = 160.0
-        density = self.getprop('ro.sf.lcd_density', strip)
-        if density:
+
+        if density := self.getprop('ro.sf.lcd_density', strip):
             return float(density) / BASE_DPI
-        density = self.getprop('qemu.sf.lcd_density', strip)
-        if density:
+
+        if density := self.getprop('qemu.sf.lcd_density', strip):
             return float(density) / BASE_DPI
         return -1.0
 
@@ -1008,16 +971,14 @@ class ADBShell(ADBClient):
         # another way to get orientation, for old sumsung device(sdk version 15)
         SurfaceFlingerRE = re.compile(r'orientation=(\d+)')
         ret = self.shell('dumpsys SurfaceFlinger')
-        m = SurfaceFlingerRE.search(ret)
-        if m:
+        if m := SurfaceFlingerRE.search(ret):
             return int(m.group(1))
 
         # Fallback method to obtain the orientation
         # See https://github.com/dtmilano/AndroidViewClient/issues/128
         surfaceOrientationRE = re.compile(r'SurfaceOrientation:\s+(\d+)')
         ret = self.shell('dumpsys input')
-        m = surfaceOrientationRE.search(ret)
-        if m:
+        if m := surfaceOrientationRE.search(ret):
             return int(m.group(1))
         # We couldn't obtain the orientation
         warnings.warn("Could not obtain the orientation, return 0")
@@ -1058,8 +1019,7 @@ class ADBShell(ADBClient):
         Returns:
             包安装路径
         """
-        packages = self.app_list()
-        if packageName in packages:
+        if packageName in self.app_list():
             stdout = self.shell(['pm', 'path', packageName])
             if 'package:' in stdout:
                 return stdout.split('package:')[1].strip()
@@ -1114,14 +1074,13 @@ class ADBShell(ADBClient):
             # https://issuetracker.google.com/issues/36908392
             cmds = split_cmd(cmds) + [';', 'echo', '---$?---']
             ret = self.raw_shell(cmds, decode=decode).rstrip()
-            m = re.match("(.*)---(\d+)---$", ret, re.DOTALL)
-            if not m:
+            if m := re.match("(.*)---(\d+)---$", ret, re.DOTALL):
+                stdout = m.group(1)
+                returncode = int(m.group(2))
+            else:
                 warnings.warn('return code not matched')
                 stdout = ret
                 returncode = 0
-            else:
-                stdout = m.group(1)
-                returncode = int(m.group(2))
 
             if returncode > 0:
                 if not skip_error:
@@ -1231,7 +1190,7 @@ class ADBDevice(ADBShell):
             cmds = ['monkey', '-p', package, '-c', 'android.intent.category.LAUNCHER', '1']
         else:
             cmds = ['am', 'start', '-n', f'{package}/{package}.{activity}']
-        print(self.shell(cmds))
+        self.shell(cmds)
 
     def stop_app(self, package: str) -> None:
         """
