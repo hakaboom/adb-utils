@@ -454,7 +454,7 @@ class ADBShell(ADBClient):
             # GB: memory[0], MB: memory[1], KB: memory[2]
             memory = int(int(memory[0]) * 1024) + int(memory[1])
         else:
-            memory = round(memory / 1024)
+            memory = round(int(memory) / 1024)
         return f'{str(memory)}MB'
 
     @property
