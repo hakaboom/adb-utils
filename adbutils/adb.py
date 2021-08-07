@@ -693,7 +693,7 @@ class ADBShell(ADBClient):
             raise AdbBaseError(f'get foreground_package unknown error: {m}')
 
     @property
-    def running_activities(self) -> list:
+    def running_activities(self) -> List[str]:
         """
         获取正在运行的所有activity
 
@@ -703,7 +703,7 @@ class ADBShell(ADBClient):
         return [match.group('activity') for match in self._get_running_activities()]
 
     @property
-    def running_package(self) -> list:
+    def running_package(self) -> List[str]:
         """
         获取正在运行的所有包名
 
@@ -727,7 +727,7 @@ class ADBShell(ADBClient):
         return ime
 
     @property
-    def ime_list(self) -> list:
+    def ime_list(self) -> List[str]:
         """
         获取系统可用输入法
 
@@ -1026,7 +1026,7 @@ class ADBShell(ADBClient):
         else:
             return None
 
-    def app_list(self, flag_options: Union[str, list, None] = None) -> list:
+    def app_list(self, flag_options: Union[str, list, None] = None) -> List[str]:
         """
         command 'adb shell pm list packages'
 
@@ -1044,7 +1044,11 @@ class ADBShell(ADBClient):
         Returns:
 
         """
-        cmds = ['cmd', 'package', 'list', 'packages']
+        if self.sdk_version >= 24:
+            cmds = ['cmd', 'package', 'list', 'packages']
+        else:
+            cmds = ['pm', 'list', 'packages']
+
         if isinstance(flag_options, str):
             cmds.append(flag_options)
         elif isinstance(flag_options, list):
@@ -1302,7 +1306,7 @@ class ADBDevice(ADBShell):
 
 
 class ADBExtraDevice(ADBDevice):
-    def __init__(self, aapt: bool = True, minicap: bool = True,
+    def __init__(self, aapt: bool = False, minicap: bool = False,
                  *args, **kwargs):
         """
         添加了额外模块的adb

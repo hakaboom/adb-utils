@@ -23,13 +23,18 @@ class Aapt(object):
         """
         app_info = self._get_app_info(packageName)
         if m := self._parse_app_info(app_info):
+            try:
+                app_name = m.group('app_name_zh')
+            except IndexError:
+                app_name = m.group('app_name')
+
             return {
                 'package_name': m.group('package_name'),
                 'versionCode': m.group('versionCode'),
                 'versionName': m.group('versionName'),
                 'sdkVersion': m.group('sdkVersion'),
                 'targetSdkVersion': m.group('targetSdkVersion'),
-                'app_name': m.group('app_name'),
+                'app_name': app_name,
                 'launchable_activity': m.group('launchable_activity'),
             }
 
@@ -69,11 +74,14 @@ class Aapt(object):
             packageName: app包名
 
         Returns:
-            app name
+            app name,优先返回label-zh
         """
         app_info = self._get_app_info(packageName)
         if m := self._parse_app_info(app_info):
-            return m.group('app_name')
+            try:
+                return m.group('app_name_zh')
+            except IndexError:
+                return m.group('app_name')
 
     def get_app_sdkVersion(self, packageName: str) -> Optional[str]:
         """
@@ -128,13 +136,14 @@ class Aapt(object):
         Returns:
 
         """
-        pattern = re.compile(r'package: name=\'(?P<package_name>.*)\' '
-                             r'versionCode=\'(?P<versionCode>.*)\' '
-                             r'versionName=\'(?P<versionName>.*)\' platformBuildVersionName='
-                             r'.*sdkVersion:\'(?P<sdkVersion>.\d+)\''
-                             r'.*targetSdkVersion:\'(?P<targetSdkVersion>.\d+)\''
-                             r'.*application: label=\'(?P<app_name>.*)\' icon='
-                             r'.*launchable-activity: name=\'(?P<launchable_activity>.*)\'  label=', re.DOTALL)
+        pattern = re.compile(r'package: name=\'(?P<package_name>\S*)\' '
+                             r'versionCode=\'(?P<versionCode>\S*)\' '
+                             r'versionName=\'(?P<versionName>\S*)\''
+                             r'.*sdkVersion:\'(?P<sdkVersion>\d+)\''
+                             r'.*targetSdkVersion:\'(?P<targetSdkVersion>\d+)\''
+                             r'.*application-label-zh:\'(?P<app_name_zh>\S+)\''
+                             r'.*application: label=\'(?P<app_name>\S*)\''
+                             r'.*launchable-activity: name=\'(?P<launchable_activity>\S*)\'', re.DOTALL)
         m = pattern.search(app_info)
         return m if m else None
 
