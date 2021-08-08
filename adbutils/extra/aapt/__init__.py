@@ -193,20 +193,3 @@ class Aapt(object):
                 self.device.push(local=AAPT_LOCAL_PATH['x86'], remote=AAPT_REMOTE_PATH)
             time.sleep(1)
             self.device.shell(['chmod', '755', AAPT_REMOTE_PATH])
-
-
-if __name__ == '__main__':
-    from adbutils import ADBDevice
-    from adbutils.extra.performance.meminfo import Meminfo
-
-    device_id = ''
-    device = ADBDevice(device_id=device_id)
-    performance = Meminfo(device)
-
-    performance.get_system_meminfo()
-
-    for i in range(100):
-        package_name = device.foreground_package
-        total = performance.get_app_summary(package_name)['total']
-        # 打印package_name对应app的内存占用
-        print(f'{(int(total) / 1024):.0f}MB')
