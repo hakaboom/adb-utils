@@ -85,6 +85,11 @@ AAPT_LOCAL_PATH = {
 AAPT_REMOTE_PATH = os.path.join(ANDROID_TMP_PATH, 'aapt')
 
 
+# busyBox
+BUSYBOX_LOCAL_PATH = os.path.join(STATICPATH, 'busybox', 'busybox-arm{}')
+BUSYBOX_REMOTE_PATH = os.path.join(ANDROID_TMP_PATH, 'busybox')
+
+
 # minicap
 MNC_REMOTE_PATH = os.path.join(ANDROID_TMP_PATH, 'minicap')
 MNC_SO_REMOTE_PATH = os.path.join(ANDROID_TMP_PATH, 'minicap.so')
