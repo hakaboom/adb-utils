@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import re
 import time
 
 from adbutils import ADBDevice
@@ -19,7 +20,7 @@ class Top(object):
         Returns:
             None
         """
-        if not self.device.check_file(ANDROID_TMP_PATH, 'busyBox'):
+        if not self.device.check_file(ANDROID_TMP_PATH, 'busybox'):
             if 'v8' in self.device.abi_version:
                 local = BUSYBOX_LOCAL_PATH.format('v8l')
             elif 'v7r' in self.device.abi_version:
@@ -36,3 +37,12 @@ class Top(object):
             self.device.push(local=local, remote=BUSYBOX_REMOTE_PATH)
             time.sleep(1)
             self.device.shell(['chmod', '755', BUSYBOX_REMOTE_PATH])
+
+    def get_cpu_stat(self):
+        """
+        command 'adb shell cat /proc/stat
+
+        Returns:
+
+        """
+        return self.device.shell(['cat', '/proc/stat'])
