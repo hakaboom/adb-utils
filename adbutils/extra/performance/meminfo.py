@@ -2,11 +2,12 @@
 import re
 from typing import Match, Optional, Union, Dict, Tuple, List
 
+from adbutils import ADBDevice
 from .exceptions import AdbProcessNotFound
 
 
 class Meminfo(object):
-    def __init__(self, device):
+    def __init__(self, device: ADBDevice):
         """
         获取设备性能数据
 
@@ -111,14 +112,14 @@ class Meminfo(object):
             meminfo = self._parse_app_meminfo(meminfo)
             meminfo = meminfo.group('meminfo')
             pattern = re.compile(r'\s*(\S+\s?\S*)\s*(.*)\r?')
-            for i in pattern.findall(meminfo):
-                _meminfo = i[1]
+            for line in pattern.findall(meminfo):
+                _meminfo = line[1]
                 mem_pattern = re.compile(r'(\d+)\s*')
                 mem = mem_pattern.findall(_meminfo)
                 mem += [0 for _ in range(_memory_info_count - len(mem))]
 
-                name = i[0].strip().lower().replace(' ', '_')
-                ret[name] = {param_list[index]: v for index,v in enumerate([int(v) for v in mem])}
+                name = line[0].strip().lower().replace(' ', '_')
+                ret[name] = {param_list[index]: v for index, v in enumerate([int(v) for v in mem])}
         return ret
 
     def get_app_summary(self, package: Union[str, int]) -> Dict[str, int]:

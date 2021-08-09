@@ -150,6 +150,7 @@ class ADBClient(object):
     def remove_forward(self, local: Optional[str] = None) -> None:
         """
         command adb forward --remove <local>
+
         Args:
             local: 本地端口。如果未指定local,则默认清除所有连接' adb forward --remove-all'
 
@@ -186,6 +187,7 @@ class ADBClient(object):
     def get_forward_port(self, remote: str, device_id: Optional[str] = None) -> Optional[int]:
         """
         获取开放端口的端口号
+
         Args:
             remote (str): 设备端口
             device_id (str): 获取指定设备下的端口
@@ -207,6 +209,7 @@ class ADBClient(object):
     def get_available_forward_local(self) -> int:
         """
         随机获取一个可用的端口号
+
         Returns:
             可用端口(int)
         """
@@ -508,6 +511,7 @@ class ADBShell(ADBClient):
     def cpu_abi(self) -> str:
         """
         获取cpu构架
+
         Returns:
             cpu构建
         """
@@ -1150,10 +1154,11 @@ class ADBDevice(ADBShell):
         img_data = np.fromfile(raw_local_path, dtype=np.uint16)
         width, height = img_data[2], img_data[0]
         # read raw
+        _line = 4  # 色彩通道数
         img_data = np.fromfile(raw_local_path, dtype=np.uint8)
-        img_data = img_data[slice(12, len(img_data))]
+        img_data = img_data[slice(_line * 4, len(img_data))]
         # 范围截取
-        img_data = img_data.reshape(width, height, 4)
+        img_data = img_data.reshape(width, height, _line)
         width, height = img_data.shape[1::-1]
         if rect:
             if isinstance(rect, Rect):
