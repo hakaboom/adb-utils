@@ -9,9 +9,13 @@ from typing import Union, Tuple
 
 
 class Top(object):
+    cpu_jiffies_pattern = re.compile(r'(\d+)')
+
     def __init__(self, device: ADBDevice):
         self.device = device
-        self._install_busyBox()
+        self._total_cpu_stat = []
+        self._core_stat = []
+        # self._install_busyBox()
 
     def _install_busyBox(self):
         """
@@ -46,3 +50,23 @@ class Top(object):
 
         """
         return self.device.shell(['cat', '/proc/stat'])
+
+    def _pares_cpu_stat(self, cpu_stat: str):
+        total_cpu_pattern = re.compile(r'cpu\s*(.*)')
+        core_stat_pattern = re.compile(r'cpu(\d+)\s*(.*)')
+
+        total_cpu_stat = None
+        cpu_core_stat = []
+
+        if total_stat := total_cpu_pattern.findall(cpu_stat):
+            total_stat = self.cpu_jiffies_pattern.findall(total_stat[0])
+            if isinstance(total_stat, list):
+                total_cpu_stat = [int(v) for v in total_stat]
+
+        if core_stat_list := core_stat_pattern.findall(cpu_stat):
+            for core_stat in core_stat_list:
+                _core_stat = self.cpu_jiffies_pattern.findall(core_stat[1].strip())
+                if isinstance(_core_stat, list):
+                    cpu_core_stat.append([int(v) for v in _core_stat])
+
+        return total_cpu_stat, cpu_core_stat
