@@ -6,8 +6,6 @@ import os
 import time
 import warnings
 
-import numpy as np
-from baseImage import Rect, Point
 
 from adbutils._utils import (get_adb_exe, split_cmd, _popen_kwargs, get_std_encoding, check_file)
 from adbutils.constant import (ANDROID_ADB_SERVER_HOST, ANDROID_ADB_SERVER_PORT, ADB_CAP_RAW_REMOTE_PATH,
@@ -15,7 +13,6 @@ from adbutils.constant import (ANDROID_ADB_SERVER_HOST, ANDROID_ADB_SERVER_PORT,
 from adbutils.exceptions import (AdbError, AdbShellError, AdbBaseError, AdbTimeout, NoDeviceSpecifyError,
                                  AdbDeviceConnectError, AdbInstallError, AdbSDKVersionError, AdbExtraModuleNotFount)
 from adbutils._wraps import retries
-from loguru import logger
 
 from typing import Union, List, Optional, Tuple, Dict, Match, Iterator, Final
 
@@ -401,7 +398,6 @@ class ADBClient(object):
             cmd_options = self.cmd_options
 
         cmds = cmd_options + cmds
-        logger.info(' '.join(cmds))
         proc = subprocess.Popen(
             cmds,
             stdin=subprocess.PIPE,
@@ -1126,58 +1122,6 @@ class ADBShell(ADBClient):
 
 
 class ADBDevice(ADBShell):
-    def screenshot(self, rect: Union[Rect, Tuple[int, int, int, int], List[int]] = None) -> np.ndarray:
-        """
-        command 'adb screencap'
-
-        Args:
-            rect: 自定义截取范围 Rect/(x, y, width, height)
-
-        Raises:
-                ValueError:传入参数rect错误
-                OverflowError:rect超出屏幕边界范围
-        Returns:
-            图像数据
-        """
-        remote_path = ADB_CAP_RAW_REMOTE_PATH
-        raw_local_path = ADB_CAP_RAW_LOCAL_PATH.format(device_id=self.get_device_id(True))
-
-        self.raw_shell(['screencap', remote_path])
-        self.start_shell(['chmod', '755', remote_path])
-        self.pull(local=raw_local_path, remote=remote_path)
-
-        # read size
-        img_data = np.fromfile(raw_local_path, dtype=np.uint16)
-        width, height = img_data[2], img_data[0]
-        # read raw
-        img_data = np.fromfile(raw_local_path, dtype=np.uint8)
-        img_data = img_data[slice(12, len(img_data))]
-        # 范围截取
-        img_data = img_data.reshape(width, height, 4)
-        width, height = img_data.shape[1::-1]
-        if rect:
-            if isinstance(rect, Rect):
-                pass
-            elif isinstance(rect, (tuple, list)):
-                try:
-                    rect = Rect(*rect)
-                except TypeError:
-                    raise ValueError('param "rect" takes 4 positional arguments <x,y,width,height>')
-            else:
-                raise ValueError('param "rect" must be <Rect>/tuple/list')
-
-            # 判断边界是否超出width,height
-            if not Rect(0, 0, width, height).contains(rect):
-                raise OverflowError(f'rect不能超出屏幕边界 {rect}')
-            x_min, y_min = int(rect.tl.x), int(rect.tl.y)
-            x_max, y_max = int(rect.br.x), int(rect.br.y)
-            img_data = img_data[y_min:y_max, x_min:x_max]
-
-        img_data = img_data[:, :, ::-1][:, :, 1:4]  # imgData中rgbA转为ABGR,并截取bgr
-        # 删除raw临时文件
-        os.remove(raw_local_path)
-        return img_data
-
     def start_app(self, package: str, activity: Optional[str] = None):
         """
         if not activity command 'adb shell monkey'
@@ -1220,53 +1164,6 @@ class ADBDevice(ADBShell):
             None
         """
         self.shell(['pm', 'clear', package])
-
-    def tap(self, point: Union[Tuple[int, int], Point]):
-        """
-        command 'adb shell input tap' 点击屏幕
-
-        Args:
-            point: 坐标(x,y)
-
-        Returns:
-            None
-        """
-        x, y = None, None
-        if isinstance(point, Point):
-            x, y = point.x, point.y
-        elif isinstance(point, (tuple, list)):
-            x, y = point[0], point[1]
-        self.shell(f'input tap {x} {y}')
-
-    def swipe(self, start_point: Union[Tuple[int, int], Point], end_point: Union[Tuple[int, int], Point],
-              duration: int = 500) -> None:
-        """
-        command 'adb shell input swipe> 滑动屏幕
-
-        Args:
-            start_point: 起点坐标
-            end_point: 重点坐标
-            duration: 操作后延迟
-        Returns:
-            None
-        """
-
-        def _handle(point):
-            if isinstance(point, Point):
-                return point.x, point.y
-            elif isinstance(point, (tuple, list)):
-                return point
-
-        start_x, start_y = _handle(start_point)
-        end_x, end_y = _handle(end_point)
-
-        version = self.sdk_version
-        if version <= 15:
-            raise AdbSDKVersionError(f'swipe: API <= 15 not supported (version={version})')
-        elif version <= 17:
-            self.shell(f'input swipe {start_x} {start_y} {end_x} {end_y} {duration}')
-        else:
-            self.shell(f'input touchscreen swipe {start_x} {start_y} {end_x} {end_y}')
 
     def set_input_method(self, ime_method: str, ime_apk_path: Optional[str] = None) -> None:
         """
