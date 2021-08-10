@@ -5,7 +5,7 @@ import re
 IP_PATTERN = re.compile(r'(\d+\.){3}\d+')
 STATICPATH = os.path.join(os.path.abspath('adbutils'), 'static')
 DEFAULT_ADB_PATH = {
-    "Windows": os.path.join(STATICPATH, "adb", "windows"),
+    "Windows": os.path.join(STATICPATH, "adb", "windows", 'adb'),
     "Darwin": os.path.join(STATICPATH, "adb", "mac", "adb"),
     "Linux": os.path.join(STATICPATH, "adb", "linux", "adb"),
     "Linux-x86_64": os.path.join(STATICPATH, "adb", "linux", "adb"),
