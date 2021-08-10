@@ -16,7 +16,6 @@ class Top(object):
         self.device = device
         self._total_cpu_stat = []
         self._core_cpu_stat = []
-        # self._install_busyBox()
 
     def total_cpu_usage(self, _cpu_stat: str = None) -> Union[float]:
         """
