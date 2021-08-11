@@ -103,8 +103,7 @@ class Top(object):
         """
         if ret := self.device.shell(['cat', '/proc/stat']):
             return ret
-        else:
-            return self.get_cpu_stat()
+        return self.get_cpu_stat()
 
     def _pares_cpu_stat(self, cpu_stat: str) -> Tuple[List[int], List[List[int]]]:
         """
