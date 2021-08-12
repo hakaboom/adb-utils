@@ -10,6 +10,7 @@ from typing import Union, Tuple, List
 
 # TODO: _total_cpu_stat, _core_cpu_stat, _app_cpu_stat的保存需要重写
 
+
 class Top(object):
     # user/nice/system/idle/iowait/irq/softirq/stealstolen/guest
     cpu_jiffies_pattern = re.compile(r'(\d+)')
@@ -41,65 +42,44 @@ class Top(object):
             self._app_cpu_stat[packageName] = app_cpu_stat
             return self.app_cpu_usage(packageName, _cpu_stat=cpu_stat)
 
+        if not self._total_cpu_stat:
+            self._total_cpu_stat = total_cpu_stat
+            return self.app_cpu_usage(packageName, _app_stat=app_stat)
+
         total_cpu_time = sum(total_cpu_stat) - sum(self._total_cpu_stat)
         app_cpu_time = (int(app_cpu_stat[13]) + int(app_cpu_stat[14])) - (int(self._app_cpu_stat[packageName][13]) +
                                                                           int(self._app_cpu_stat[packageName][14]))
         app_usage = 100 * (app_cpu_time / total_cpu_time)
 
         self._app_cpu_stat[packageName] = app_cpu_stat
+        self._total_cpu_stat = total_cpu_time
         return app_usage
 
-    def total_cpu_usage(self, _cpu_stat: str = None) -> Union[float]:
-        """
-        获取总cpu使用率
-
-        Args:
-            _cpu_stat: cpu数据
-
-        Returns:
-            总cpu使用率
-        """
+    def cpu_usage(self, _cpu_stat: str = None) -> Tuple[float, List[float]]:
         cpu_stat = _cpu_stat or self.get_cpu_stat()
         total_cpu_stat, cpu_core_stat = self._pares_cpu_stat(cpu_stat)
-        if not self._total_cpu_stat:
-            self._total_cpu_stat = total_cpu_stat
-            # self._core_cpu_stat = cpu_core_stat
-            return self.total_cpu_usage()
 
-        idle = total_cpu_stat[3] - self._total_cpu_stat[3]
+        if not self._total_cpu_stat or not self._core_cpu_stat:
+            if not self._total_cpu_stat:
+                self._total_cpu_stat = total_cpu_stat
+            if not self._core_cpu_stat:
+                self._core_cpu_stat = cpu_core_stat
+            return self.cpu_usage()
+
+        total_idle = total_cpu_stat[3] - self._total_cpu_stat[3]
         total_cpu_time = sum(total_cpu_stat) - sum(self._total_cpu_stat)
-        cpu_usage = 100 * (total_cpu_time - idle) / total_cpu_time
+        total_cpu_usage = 100 * (total_cpu_time - total_idle) / total_cpu_time
 
-        self._total_cpu_stat = total_cpu_stat
-        # self._core_cpu_stat = cpu_core_stat
-        return cpu_usage
-
-    def core_cpu_usage(self, _cpu_stat: str = None) -> List[float]:
-        """
-        获取每个核心的使用率
-
-        Args:
-            _cpu_stat: cpu信息
-
-        Returns:
-            每个核心的使用率
-        """
-        cpu_stat = _cpu_stat or self.get_cpu_stat()
-        total_cpu_stat, cpu_core_stat = self._pares_cpu_stat(cpu_stat)
-        if not self._core_cpu_stat:
-            # self._total_cpu_stat = total_cpu_stat
-            self._core_cpu_stat = cpu_core_stat
-            return self.core_cpu_usage()
-
-        core_usage = []
+        cpu_core_usage = []
         for cpu_index, core_stat in enumerate(cpu_core_stat):
             idle = core_stat[3] - self._core_cpu_stat[cpu_index][3]
             total_cpu_time = sum(core_stat) - sum(self._core_cpu_stat[cpu_index])
-            core_usage.append(100 * (total_cpu_time - idle) / total_cpu_time)
+            cpu_core_usage.append(100 * (total_cpu_time - idle) / total_cpu_time)
 
-        # self._total_cpu_stat = total_cpu_stat
+        self._total_cpu_stat = total_cpu_stat
         self._core_cpu_stat = cpu_core_stat
-        return core_usage
+
+        return total_cpu_usage, cpu_core_usage
 
     def _install_busyBox(self) -> None:
         """
@@ -252,10 +232,9 @@ if __name__ == '__main__':
     top_watcher = Top(device)
 
     while True:
-        cpu_stat = top_watcher.get_cpu_stat()
-        if core_usage := top_watcher.core_cpu_usage():
-            print('\t'.join([f'cpu{core_index} {usage:.1f}%' for core_index, usage in enumerate(core_usage)]))
+        if usage := top_watcher.cpu_usage():
+            cpu_usage, core_usage = usage[0], usage[1]
+            print(f'{cpu_usage:.1f}%'
+                  '\t'.join([f'cpu{core_index} {usage:.1f}%' for core_index, usage in enumerate(core_usage)]))
 
-        if cpu_usage := top_watcher.total_cpu_usage():
-            print(f'{cpu_usage:.1f}%')
         time.sleep(.5)
