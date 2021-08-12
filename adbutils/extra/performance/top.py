@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
 import re
 import time
+from typing import Union, Tuple, List
 
 from adbutils import ADBDevice
 from adbutils.constant import ANDROID_TMP_PATH, BUSYBOX_LOCAL_PATH, BUSYBOX_REMOTE_PATH
 from adbutils.exceptions import AdbShellError
 
-from typing import Union, Tuple, List
+from loguru import logger
+
 
 # TODO: _total_cpu_stat, _core_cpu_stat, _app_cpu_stat的保存需要重写
 
@@ -14,6 +16,9 @@ from typing import Union, Tuple, List
 class Top(object):
     # user/nice/system/idle/iowait/irq/softirq/stealstolen/guest
     cpu_jiffies_pattern = re.compile(r'(\d+)')
+    total_cpu_pattern = re.compile(r'cpu\s+(.*)')
+    core_stat_pattern = re.compile(r'cpu(\d+)\s*(.*)')
+    app_stat_pattern = re.compile(r'(\d+\s*\(\S+\)(\s+\S+){50})+')
 
     def __init__(self, device: ADBDevice):
         self.device = device
@@ -21,61 +26,33 @@ class Top(object):
         self._core_cpu_stat = []
         self._app_cpu_stat = {}
 
-    def app_cpu_usage(self, packageName: str, _cpu_stat: str = None, _app_stat: str = None):
-        """
-        获取app使用率
-
-        Args:
-            packageName: 包名
-            _cpu_stat: cpu信息数据
-            _app_stat: app信息数据
-
-        Returns:
-            app使用率
-        """
-        cpu_stat = _cpu_stat or self.get_cpu_stat()
-        app_stat = _app_stat or self.get_app_cpu_stat(packageName)
-
-        total_cpu_stat, _ = self._pares_cpu_stat(cpu_stat)
-        app_cpu_stat = self._pares_app_cpu_stat(app_stat)
-        if not self._app_cpu_stat.get(packageName):
-            self._app_cpu_stat[packageName] = app_cpu_stat
-            return self.app_cpu_usage(packageName, _cpu_stat=cpu_stat)
-
-        if not self._total_cpu_stat:
-            self._total_cpu_stat = total_cpu_stat
-            return self.app_cpu_usage(packageName, _app_stat=app_stat)
-
-        total_cpu_time = sum(total_cpu_stat) - sum(self._total_cpu_stat)
-        app_cpu_time = (int(app_cpu_stat[13]) + int(app_cpu_stat[14])) - (int(self._app_cpu_stat[packageName][13]) +
-                                                                          int(self._app_cpu_stat[packageName][14]))
-        app_usage = 100 * (app_cpu_time / total_cpu_time)
-
-        self._app_cpu_stat[packageName] = app_cpu_stat
-        self._total_cpu_stat = total_cpu_time
-        return app_usage
-
-    def cpu_usage(self, _cpu_stat: str = None) -> Tuple[float, List[float]]:
-        cpu_stat = _cpu_stat or self.get_cpu_stat()
-        total_cpu_stat, cpu_core_stat = self._pares_cpu_stat(cpu_stat)
+    def get_cpu_usage(self):
+        # step1: 记录cpu数据
+        cpu_stat = self.get_cpu_stat()
+        try:
+            total_cpu_stat, cpu_core_stat = self._pares_cpu_stat(cpu_stat)
+        except ValueError:
+            return self.get_cpu_usage()
 
         if not self._total_cpu_stat or not self._core_cpu_stat:
             if not self._total_cpu_stat:
                 self._total_cpu_stat = total_cpu_stat
             if not self._core_cpu_stat:
                 self._core_cpu_stat = cpu_core_stat
-            return self.cpu_usage()
+            return self.get_cpu_usage()
 
+        # step2: 计算总使用率
         total_idle = total_cpu_stat[3] - self._total_cpu_stat[3]
         total_cpu_time = sum(total_cpu_stat) - sum(self._total_cpu_stat)
         total_cpu_usage = 100 * (total_cpu_time - total_idle) / total_cpu_time
-
+        # step3: 计算各核心使用率
         cpu_core_usage = []
         for cpu_index, core_stat in enumerate(cpu_core_stat):
             idle = core_stat[3] - self._core_cpu_stat[cpu_index][3]
             total_cpu_time = sum(core_stat) - sum(self._core_cpu_stat[cpu_index])
             cpu_core_usage.append(100 * (total_cpu_time - idle) / total_cpu_time)
 
+        # step4: 记录保留数据
         self._total_cpu_stat = total_cpu_stat
         self._core_cpu_stat = cpu_core_stat
 
@@ -117,65 +94,53 @@ class Top(object):
             return ret
         return self.get_cpu_stat()
 
-    def _pares_cpu_stat(self, cpu_stat: str) -> Tuple[List[int], List[List[int]]]:
+    def _pares_cpu_stat(self, stat: str) -> Tuple[List[int], List[List[int]]]:
         """
         处理cpu信息数据
 
         Args:
-            cpu_stat: cpu数据
+            stat: cpu数据
 
         Returns:
             总cpu数据和每个核心的数据
         """
-        total_cpu_pattern = re.compile(r'cpu\s*(.*)')
-        core_stat_pattern = re.compile(r'cpu(\d+)\s*(.*)')
-
         total_cpu_stat = None
         cpu_core_stat = []
 
-        if total_stat := total_cpu_pattern.findall(cpu_stat):
+        if total_stat := self.total_cpu_pattern.findall(stat):
             total_stat = self.cpu_jiffies_pattern.findall(total_stat[0])
-            if isinstance(total_stat, list):
-                total_cpu_stat = [int(v) for v in total_stat]
+            total_cpu_stat = [int(v) for v in total_stat]
 
-        if core_stat_list := core_stat_pattern.findall(cpu_stat):
+        if core_stat_list := self.core_stat_pattern.findall(stat):
             for core_stat in core_stat_list:
                 _core_stat = self.cpu_jiffies_pattern.findall(core_stat[1].strip())
-                if isinstance(_core_stat, list):
-                    cpu_core_stat.append([int(v) for v in _core_stat])
+                cpu_core_stat.append([int(v) for v in _core_stat])
+
+        if not total_cpu_stat or not cpu_core_stat:
+            raise ValueError('未获取到cpu信息,需要重新运行cat')  # TODO: 增加对应报错
 
         return total_cpu_stat, cpu_core_stat
 
     def get_app_cpu_stat(self, packageName: str):
-        """
-        command 'adb shell cat /proc/pid/stat' 获取进程的活动信息
-
-        Args:
-            packageName: 包名
-
-        Returns:
-            进程活动信息
-        """
         pid = self.device.get_pid_by_name(packageName)
         if not pid:
             raise ValueError()  # TODO: 增加对应报错
 
         try:
-            ret = self.device.shell(['cat', f'/proc/{pid[0][0]}/stat'])
+            ret = self.device.shell(f'cat /proc/stat&cat /proc/{pid[0][0]}/stat')
         except AdbShellError as err:
             if 'No such file or directory' in str(err):
-                raise ValueError()  # TODO: 增加对应报错
+                raise ValueError(err)  # TODO: 增加对应报错
             raise err
 
         return ret if ret else self.get_app_cpu_stat(packageName)
 
-    @staticmethod
-    def _pares_app_cpu_stat(app_stat: str):
+    def _pares_app_cpu_stat(self, stat: str):
         """
         处理进程的信息数据
 
         Args:
-            app_stat: app信息数据
+            stat: app信息数据
 
         Returns:
 
@@ -218,9 +183,49 @@ class Top(object):
             (33)blocked：阻塞的信号，十进制
             (34)sigignore：被忽略的信号，十进制，此处等于36088
         """
+        app_cpu_stat = None
+        ret = self.app_stat_pattern.findall(stat)
+
+        if ret:
+            app_cpu_stat = ret[0][0]
+
+        cpu_stat = stat.replace(app_cpu_stat, '')
+        if not cpu_stat:
+            raise ValueError('未获取到cpu信息,需要重新运行cat')  # TODO: 增加对应报错
+
+        total_cpu_stat, cpu_core_stat = self._pares_cpu_stat(cpu_stat)
+
         pattern = re.compile(r'(\S+)\s*')
-        if m := pattern.findall(app_stat):
-            return m
+        if app_stat := pattern.findall(app_cpu_stat):
+            return app_stat, total_cpu_stat, cpu_core_stat
+
+    def get_app_usage(self, packageName: str):
+        app_stat = self.get_app_cpu_stat(packageName)
+        try:
+            app_stat, total_cpu_stat, core_cpu_stat = self._pares_app_cpu_stat(app_stat)
+        except ValueError:
+            return self.get_app_usage(packageName)
+
+        if not self._total_cpu_stat or not self._core_cpu_stat or not self._app_cpu_stat.get(packageName):
+            if not self._total_cpu_stat:
+                self._total_cpu_stat = total_cpu_stat
+            if not self._core_cpu_stat:
+                self._core_cpu_stat = core_cpu_stat
+            if not self._app_cpu_stat.get(packageName):
+                self._app_cpu_stat[packageName] = app_stat
+            return self.get_app_usage(packageName)
+
+        total_cpu_time = sum(total_cpu_stat) - sum(self._total_cpu_stat)
+        app_cpu_time = sum([int(v) for v in app_stat[13:17]]) - sum([int(v)
+                                                                     for v in self._app_cpu_stat[packageName][13:17]])
+
+        app_usage = 100 * (app_cpu_time / total_cpu_time)
+
+        self._total_cpu_stat = total_cpu_stat
+        self._core_cpu_stat = core_cpu_stat
+        self._app_cpu_stat[packageName] = app_stat
+
+        return app_usage
 
 
 if __name__ == '__main__':
@@ -232,7 +237,7 @@ if __name__ == '__main__':
     top_watcher = Top(device)
 
     while True:
-        if usage := top_watcher.cpu_usage():
+        if usage := top_watcher.get_cpu_usage():
             cpu_usage, core_usage = usage[0], usage[1]
             print(f'{cpu_usage:.1f}%'
                   '\t'.join([f'cpu{core_index} {usage:.1f}%' for core_index, usage in enumerate(core_usage)]))
