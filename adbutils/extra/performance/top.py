@@ -8,6 +8,7 @@ from adbutils.exceptions import AdbShellError
 
 from typing import Union, Tuple, List
 
+# TODO: _total_cpu_stat, _core_cpu_stat, _app_cpu_stat的保存需要重写
 
 class Top(object):
     # user/nice/system/idle/iowait/irq/softirq/stealstolen/guest
