@@ -417,6 +417,7 @@ class ADBClient(object):
 
 class ADBShell(ADBClient):
     SHELL_ENCODING: Final[str] = 'utf-8'  # adb shell的编码
+    PS_HEAD: Final[List[str]] = ['user', 'pid', 'ppid', 'vsize', 'rss', '', 'wchan', 'pc', 'name']  # adb shell ps
 
     @property
     def line_breaker(self) -> str:
@@ -785,6 +786,46 @@ class ADBShell(ADBClient):
             return m.group('Bool') == 'true'
         raise AdbBaseError('Could not determine screen lock state')
 
+    def get_pid_by_name(self, packageName: str, fuzzy_search: Optional[bool] = False) -> List[Tuple[int, str]]:
+        """
+        根据进程名获取对应pid
+
+        Args:
+            packageName: 包名
+            fuzzy_search: if True,返回所有包含packageName的pid
+        Returns:
+            获取到的进程列表(pid, name)
+        """
+        if fuzzy_search:
+            return [(int(proc[self.PS_HEAD.index('pid')]), proc_name) for proc in self.get_process()
+                    if packageName in (proc_name := proc[self.PS_HEAD.index('name')])]
+        else:
+            return [(int(proc[self.PS_HEAD.index('pid')]), proc_name) for proc in self.get_process()
+                    if packageName == (proc_name := proc[self.PS_HEAD.index('name')])]
+
+    def get_process(self, flag_options: Union[str, list, tuple, None] = None) -> List[List[str]]:
+        """
+        command 'adb shell ps'
+
+        Returns:
+            所有进程的列表
+        """
+        cmds = ['ps']
+        if isinstance(flag_options, str):
+            cmds.append(flag_options)
+        elif isinstance(flag_options, (list, tuple)):
+            cmds = cmds + flag_options
+
+        process = []
+        process_pattern = re.compile('(\S+)')
+        if ret := self.shell(cmds):
+            ret = ret.splitlines()
+            for v in ret[1:]:
+                if proc := process_pattern.findall(v):
+                    process.append(proc)
+
+        return process
+
     def _get_running_activities(self) -> Optional[Iterator[Match[str]]]:
         """
         command 'adb dumpsys activity activities'
@@ -1030,7 +1071,7 @@ class ADBShell(ADBClient):
         else:
             return None
 
-    def app_list(self, flag_options: Union[str, list, None] = None) -> List[str]:
+    def app_list(self, flag_options: Union[str, list, tuple, None] = None) -> List[str]:
         """
         command 'adb shell pm list packages'
 
@@ -1055,7 +1096,7 @@ class ADBShell(ADBClient):
 
         if isinstance(flag_options, str):
             cmds.append(flag_options)
-        elif isinstance(flag_options, list):
+        elif isinstance(flag_options, (list, tuple)):
             cmds = cmds + flag_options
         ret = self.shell(cmds)
         packages = ret.splitlines()
