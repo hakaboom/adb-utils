@@ -404,7 +404,7 @@ class ADBClient(object):
             cmd_options = self.cmd_options
 
         cmds = cmd_options + cmds
-        logger.info(' '.join(cmds))
+        # logger.info(' '.join(cmds))
         proc = subprocess.Popen(
             cmds,
             stdin=subprocess.PIPE,
@@ -469,11 +469,11 @@ class ADBShell(ADBClient):
         Returns:
             cpu核心数量
         """
-        if not hasattr(self, '_cpu_coreNum'):
-            setattr(self, '_cpu_coreNum', int(self.shell("cat /proc/cpuinfo").strip().count('processor')))
-            return self.cpu_coreNum
+        ret = self.shell("cat /proc/cpuinfo").strip()
+        if cpuNum := ret.count('processor'):
+            return int(cpuNum)
         else:
-            return getattr(self, '_cpu_coreNum')
+            return None
 
     @property
     def cpu_max_freq(self) -> int:
@@ -516,63 +516,8 @@ class ADBShell(ADBClient):
         Returns:
             cpu构建
         """
-        if not hasattr(self, '_cpu_adi'):
-            setattr(self, '_cpu_adi', self.shell("getprop ro.product.cpu.abi").strip())
-            return self.cpu_abi
-        else:
-            return getattr(self, '_cpu_adi')
-
-    @property
-    def gpu_model(self):
-        """
-        获取gpu型号
-
-        Returns:
-            gpu型号
-        """
-        if not hasattr(self, '_gpu_model'):
-            ret = self.shell('dumpsys SurfaceFlinger')
-            pattern = re.compile(r'GLES:\s+(.*)')
-            m = pattern.search(ret)
-            if not m:
-                return None
-            _list = m.group(1).split(',')
-            gpuModel = ''
-
-            if len(_list) > 0:
-                gpuModel = _list[1].strip()
-
-            setattr(self, '_gpu_model', gpuModel)
-            return self.gpu_model
-        else:
-            return getattr(self, '_gpu_model')
-
-    @property
-    def opengl_version(self):
-        """
-        获取设备opengl版本
-
-        Returns:
-            opengl版本
-        """
-        if not hasattr(self, '_opengl'):
-            ret = self.shell('dumpsys SurfaceFlinger')
-            pattern = re.compile(r'GLES:\s+(.*)')
-            m = pattern.search(ret)
-            if not m:
-                return None
-            _list = m.group(1).split(',')
-            opengl = ''
-
-            if len(_list) > 1:
-                m2 = re.search(r'(\S+\s+\S+\s+\S+).*', _list[2])
-                if m2:
-                    opengl = m2.group(1)
-
-            setattr(self, '_opengl', opengl)
-            return self.opengl_version
-        else:
-            return getattr(self, '_opengl')
+        if ret := self.shell("getprop ro.product.cpu.abi"):
+            return ret.strip()
 
     @property
     def model(self) -> str:
@@ -582,11 +527,7 @@ class ADBShell(ADBClient):
         Returns:
             手机型号
         """
-        if not hasattr(self, '_model'):
-            setattr(self, '_model', self.getprop('ro.product.model'))
-            return self.model
-        else:
-            return getattr(self, '_model')
+        return self.getprop('ro.product.model')
 
     @property
     def manufacturer(self) -> str:
@@ -596,11 +537,7 @@ class ADBShell(ADBClient):
         Returns:
             手机厂商名
         """
-        if not hasattr(self, '_manufacturer'):
-            setattr(self, '_manufacturer', self.getprop('ro.product.manufacturer'))
-            return self.manufacturer
-        else:
-            return getattr(self, '_manufacturer')
+        return self.getprop('ro.product.manufacturer')
 
     @property
     def android_version(self) -> str:
