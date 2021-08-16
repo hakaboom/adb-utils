@@ -3,6 +3,7 @@ python setup.py sdist
 twine upload dist/*
 """
 import re
+import sys
 import time
 
 from loguru import logger
@@ -13,39 +14,18 @@ from adbutils.extra.performance.fps import Fps
 device = ADBDevice(device_id='emulator-5554')
 fps_watcher = Fps(device=device)
 
-for i in range(1):
-    ret = fps_watcher._get_surfaceFlinger_stat("'SurfaceView - com.hypergryph.arknights/com.u8.sdk.U8UnityContext'")
-    _MIN_NORMALIZED_FRAME_LENGTH = 0.5
-    refresh_period, drawStart_timestamps, timestamps, drawEnd_timestamps = fps_watcher._pares_surfaceFlinger_stat(
-        ret
-    )
-
-    def _GetNormalizedDeltas(_data, _refresh_period, min_normalized_delta=None):
-        deltas = [t2 - t1 for t1, t2 in zip(_data, _data[1:])]
-        if min_normalized_delta:
-            deltas = filter(lambda d: d / _refresh_period >= min_normalized_delta,
-                            deltas)
-
-        return deltas, [delta / _refresh_period for delta in deltas]
-
-    frame_count = len(timestamps)  # 总共多少帧
-    seconds = timestamps[-1] - timestamps[0]  # 算时间戳查，得到总的时间
-    frame_lengths, normalized_frame_lengths = _GetNormalizedDeltas(timestamps, refresh_period)
-
-    if len(frame_lengths) < frame_count - 1:
-        logger.warning('Skipping frame lengths that are too short.')
-        frame_count = len(frame_lengths) + 1
-    if len(frame_lengths) == 0:
-        raise Exception('No valid frames lengths found.')
-
-    length_changes, normalized_changes = _GetNormalizedDeltas(frame_lengths, refresh_period)
-    jankiness = [max(0, round(change)) for change in normalized_changes]
-    pause_threshold = 20
-    jank_count = sum(1 for change in jankiness if 0 < change < pause_threshold)
-    # 返回结果，包过平均fps，和 jank的总数
-    logger.info(f'fps={(frame_count - 1) / seconds}\t'
-                f'jank={jank_count}')
-    time.sleep(.5)
+while True:
+    fps_watcher.get_fps_surfaceView("'SurfaceView - com.bilibili.azurlane/com.manjuu.azurlane.MainActivity'")
+    time.sleep(2)
+    # length_changes, normalized_changes = _GetNormalizedDeltas(frame_lengths, refresh_period)
+    #
+    # jankiness = [max(0, round(change)) for change in normalized_changes]
+    # pause_threshold = 20
+    # jank_count = sum(1 for change in jankiness if 0 < change < pause_threshold)
+    # # 返回结果，包过平均fps，和 jank的总数
+    # logger.info(f'fps={(frame_count - 1) / seconds}\t'
+    #             f'jank={jank_count}')
+    # time.sleep(.5)
 
 
 """
