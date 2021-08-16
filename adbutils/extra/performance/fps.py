@@ -25,28 +25,25 @@ class Fps(object):
         refresh_period, drawStart_timestamps, vsync_timestamps, drawEnd_timestamps = \
             self._pares_surfaceFlinger_stat(stat)
 
-        # 总共多少帧
-        frame_count = len(vsync_timestamps)
+        if not drawStart_timestamps or not vsync_timestamps or not drawEnd_timestamps:
+            return None
 
-        # 获取帧列表总长、规范化帧列表总长
-        frame_lengths, normalized_frame_lengths = self._get_normalized_deltas(vsync_timestamps, refresh_period,
-                                                                              self._MIN_NORMALIZED_FRAME_LENGTH)
-
-        if len(frame_lengths) < frame_count - 1:
-            logger.warning('Skipping frame lengths that are too short.')
-            frame_count = len(frame_lengths) + 1
-        if len(frame_lengths) == 0:
-            raise Exception('No valid frames lengths found.')
-
-        # 计算时间戳, 得到总用时
-        seconds = vsync_timestamps[-1] - vsync_timestamps[1]
-
-        fps = round((frame_count - 1) / seconds, 1)
-
+        fps = None
         if self._last_drawEnd_timestamps in drawEnd_timestamps:
-            print(111)
+            if (index := drawEnd_timestamps.index(self._last_drawEnd_timestamps)) != (len(drawEnd_timestamps) - 1):
+                frame_count = len(vsync_timestamps[index:])
+                seconds = vsync_timestamps[-1] - vsync_timestamps[index]
+                fps = round((frame_count - 1) / seconds, 1)
+        else:
+            # 总共多少帧
+            frame_count = len(vsync_timestamps)
+            seconds = vsync_timestamps[-1] - vsync_timestamps[1]
+            fps = round((frame_count - 1) / seconds, 1)
+        self._last_drawEnd_timestamps = drawStart_timestamps[-1]
 
-        self._last_drawEnd_timestamps = drawEnd_timestamps[-1]
+        if not fps:
+            return None
+        return fps
 
     def _clear_surfaceFlinger_latency(self):
         """
@@ -138,8 +135,9 @@ class Fps(object):
     @staticmethod
     def _get_normalized_deltas(data, refresh_period, min_normalized_delta=None):
         deltas = [t2 - t1 for t1, t2 in zip(data, data[1:])]
+        # print(deltas)
         if min_normalized_delta is not None:
             deltas = filter(lambda d: d / refresh_period >= min_normalized_delta,
                             deltas)
 
-        return list(deltas), [delta / refresh_period for delta in deltas]
+        return list(deltas), [delta / refresh_period for delta in list(deltas)]
