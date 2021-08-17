@@ -22,6 +22,7 @@ class Fps(object):
         _FTime = 0
         _Jank = 0
         _BigJank = 0
+        _Stutter = 0
 
         # step1: 根据window名,获取帧数信息
         stat = self._get_surfaceFlinger_stat(surface_name)
@@ -65,15 +66,16 @@ class Fps(object):
         else:
             jank_vsync_timestamps = vsync_timestamps
         jank_vsync_frameTimes = self._get_frameTimes(jank_vsync_timestamps)
-        _Jank, _BigJank = self._get_perfdog_jank(jank_vsync_frameTimes)
-
+        _Jank, _BigJank, Jank_time = self._get_perfdog_jank(jank_vsync_frameTimes)
+        _Stutter = Jank_time / seconds * 100
         # step End: 记录最后一帧时间戳
         self._last_drawEnd_timestamps = drawEnd_timestamps[-1]
 
         logger.debug(f'当前帧数:{_Fps:.2f}帧\t'
                      f'最大渲染耗时:{_FTime:.2f}ms\t'
                      f'Jank:{_Jank}\t'
-                     f'BigJank:{_BigJank}\t')
+                     f'BigJank:{_BigJank}\t'
+                     f'Stutter:{_Stutter:.2f}%')
         return _Fps
 
     def _clear_surfaceFlinger_latency(self) -> bool:
@@ -178,7 +180,7 @@ class Fps(object):
         deltas = [t2 - t1 for t1, t2 in zip(data, data[1:])]
         return deltas
 
-    def _get_perfdog_jank(self, data: List[float]) -> Tuple[int, int]:
+    def _get_perfdog_jank(self, data: List[float]) -> Tuple[int, int, float]:
         """
         根据每帧耗时,计算jank
 
@@ -195,12 +197,27 @@ class Fps(object):
         Returns:
 
         """
-        jank = [(new > self.Movie_FrameTime * 2) and (new > (sum(last) / len(last)) * 2)
-                for new, *last in zip(data[3:], data[2:], data[1:], data)].count(True)
+        _jank = [new for new, *last in zip(data[3:], data[2:], data[1:], data)
+                 if (new >= self.Movie_FrameTime * 2) and (new > (sum(last) / 3) * 2)]
 
-        bigJank = [(new > self.Movie_FrameTime * 3) and (new > (sum(last) / len(last)) * 2)
-                   for new, *last in zip(data[3:], data[2:], data[1:], data)].count(True)
-        return jank, bigJank
+        _bigJank = [new for new, *last in zip(data[3:], data[2:], data[1:], data)
+                    if (new >= self.Movie_FrameTime * 3) and (new > (sum(last) / 3) * 2)]
+
+        jank = len(_jank)
+        bigJank = len(_bigJank)
+        jank_time = sum(_jank) + sum(_bigJank)
+
+        # jank = 0
+        # bigJank = 0
+        # jank_time = 0
+        # for new, *last in zip(data[3:], data[2:], data[1:], data):
+        #     if new > ((sum(last) / 3) * 2):  # FrameTime>前三帧平均耗时2倍
+        #         if new >= self.Movie_FrameTime * 3:
+        #             bigJank += 1
+        #         elif new >= self.Movie_FrameTime * 2:
+        #             jank += 1
+
+        return jank, bigJank, jank_time
     #
     # @staticmethod
     # def _get_normalized_deltas(data, refresh_period, min_normalized_delta=None) -> Tuple[list, list]:

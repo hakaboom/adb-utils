@@ -13,6 +13,7 @@ from adbutils.extra.performance.fps import Fps
 
 device = ADBDevice(device_id='emulator-5554')
 
+
 fps_watcher = Fps(device)
 fps_ret = []
 pack = f"'SurfaceView - {device.foreground_package}/{device.foreground_activity}'"
