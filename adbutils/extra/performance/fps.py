@@ -28,24 +28,39 @@ class Fps(object):
         if not drawStart_timestamps or not vsync_timestamps or not drawEnd_timestamps:
             return None
 
-        fps = None
+        # step3: 根据上次获取的最后一帧时间戳,切分本次有效帧列表
         if self._last_drawEnd_timestamps in drawEnd_timestamps:
-            if (index := drawEnd_timestamps.index(self._last_drawEnd_timestamps)) != (len(drawEnd_timestamps) - 1):
-                frame_count = len(vsync_timestamps[index:])
-                seconds = vsync_timestamps[-1] - vsync_timestamps[index]
-                fps = round((frame_count - 1) / seconds, 1)
+            index = list(reversed(drawEnd_timestamps)).index(self._last_drawEnd_timestamps)
+            index = len(drawEnd_timestamps) - index + 1
+            if index == len(drawEnd_timestamps) - 1:
+                index = 0
         else:
-            # 总共多少帧
-            frame_count = len(vsync_timestamps)
-            seconds = vsync_timestamps[-1] - vsync_timestamps[1]
-            fps = round((frame_count - 1) / seconds, 1)
-        self._last_drawEnd_timestamps = drawStart_timestamps[-1]
+            index = 0
+
+        drawStart_timestamps = drawStart_timestamps[index:]
+        vsync_timestamps = vsync_timestamps[index:]
+        drawEnd_timestamps = drawEnd_timestamps[index:]
+
+        # step4: 计算FPS(帧数)
+        frame_count = len(vsync_timestamps)
+
+        if frame_count < 2:
+            return None
+        seconds = vsync_timestamps[-1] - vsync_timestamps[0]
+        fps = round((frame_count - 1) / seconds, 2)
+
+        # step5: 计算FTime(帧耗时),
+        _, frame_times = self._get_normalized_deltas(vsync_timestamps, refresh_period)
+        print(_, refresh_period)
+
+        # step End: 记录最后一帧时间戳
+        self._last_drawEnd_timestamps = drawEnd_timestamps[-1]
 
         if not fps:
             return None
         return fps
 
-    def _clear_surfaceFlinger_latency(self):
+    def _clear_surfaceFlinger_latency(self) -> bool:
         """
         command 'adb shell dumpsys SurfaceFlinger --latency-clear' 清除SurfaceFlinger latency里的数据
 
@@ -55,7 +70,7 @@ class Fps(object):
         ret = self.device.shell(['dumpsys', 'SurfaceFlinger', '--latency-clear'])
         return not len(ret)
 
-    def _get_surfaceFlinger_stat(self, surface_name: Optional[str] = None):
+    def _get_surfaceFlinger_stat(self, surface_name: Optional[str] = None) -> str:
         """
         command 'adb shell dumpsys SurfaceFlinger --latency <Surface Name>
 
@@ -78,6 +93,7 @@ class Fps(object):
             10771490277889	10771532902472	10771490277889
             10771507357378	10771549569138	10771507357378
             10771523229435	10771566235804	10771523229435
+            ...
 
         Args:
             stat: dumpsys SurfaceFlinger获得的信息
@@ -133,9 +149,8 @@ class Fps(object):
         return refresh_period, drawStart_timestamps, vsync_timestamps, drawEnd_timestamps
 
     @staticmethod
-    def _get_normalized_deltas(data, refresh_period, min_normalized_delta=None):
+    def _get_normalized_deltas(data, refresh_period, min_normalized_delta=None) -> Tuple[list, list]:
         deltas = [t2 - t1 for t1, t2 in zip(data, data[1:])]
-        # print(deltas)
         if min_normalized_delta is not None:
             deltas = filter(lambda d: d / refresh_period >= min_normalized_delta,
                             deltas)
