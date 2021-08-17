@@ -471,9 +471,8 @@ class ADBShell(ADBClient):
         """
         if not hasattr(self, '_cpu_coreNum'):
             setattr(self, '_cpu_coreNum', int(self.shell("cat /proc/cpuinfo").strip().count('processor')))
-            return self.cpu_coreNum
-        else:
-            return getattr(self, '_cpu_coreNum')
+
+        return getattr(self, '_cpu_coreNum')
 
     @property
     def cpu_max_freq(self) -> int:
@@ -518,9 +517,8 @@ class ADBShell(ADBClient):
         """
         if not hasattr(self, '_cpu_adi'):
             setattr(self, '_cpu_adi', self.shell("getprop ro.product.cpu.abi").strip())
-            return self.cpu_abi
-        else:
-            return getattr(self, '_cpu_adi')
+
+        return getattr(self, '_cpu_adi')
 
     @property
     def gpu_model(self):
@@ -541,11 +539,9 @@ class ADBShell(ADBClient):
 
             if len(_list) > 0:
                 gpuModel = _list[1].strip()
-
             setattr(self, '_gpu_model', gpuModel)
-            return self.gpu_model
-        else:
-            return getattr(self, '_gpu_model')
+
+        return getattr(self, '_gpu_model')
 
     @property
     def opengl_version(self):
@@ -568,11 +564,9 @@ class ADBShell(ADBClient):
                 m2 = re.search(r'(\S+\s+\S+\s+\S+).*', _list[2])
                 if m2:
                     opengl = m2.group(1)
-
             setattr(self, '_opengl', opengl)
-            return self.opengl_version
-        else:
-            return getattr(self, '_opengl')
+
+        return getattr(self, '_opengl')
 
     @property
     def model(self) -> str:
@@ -584,9 +578,8 @@ class ADBShell(ADBClient):
         """
         if not hasattr(self, '_model'):
             setattr(self, '_model', self.getprop('ro.product.model'))
-            return self.model
-        else:
-            return getattr(self, '_model')
+
+        return getattr(self, '_model')
 
     @property
     def manufacturer(self) -> str:
@@ -598,9 +591,8 @@ class ADBShell(ADBClient):
         """
         if not hasattr(self, '_manufacturer'):
             setattr(self, '_manufacturer', self.getprop('ro.product.manufacturer'))
-            return self.manufacturer
-        else:
-            return getattr(self, '_manufacturer')
+
+        return getattr(self, '_manufacturer')
 
     @property
     def android_version(self) -> str:
@@ -612,9 +604,8 @@ class ADBShell(ADBClient):
         """
         if not hasattr(self, '_android_version'):
             setattr(self, '_android_version', self.getprop('ro.build.version.release'))
-            return self.android_version
-        else:
-            return getattr(self, '_android_version')
+
+        return getattr(self, '_android_version')
 
     @property
     def sdk_version(self) -> int:
@@ -626,9 +617,8 @@ class ADBShell(ADBClient):
         """
         if not hasattr(self, '_sdk_version'):
             setattr(self, '_sdk_version', int(self.getprop('ro.build.version.sdk')))
-            return self.sdk_version
-        else:
-            return getattr(self, '_sdk_version')
+
+        return getattr(self, '_sdk_version')
 
     @property
     def abi_version(self) -> str:
@@ -640,9 +630,8 @@ class ADBShell(ADBClient):
         """
         if not hasattr(self, '_abi_version'):
             setattr(self, '_abi_version', self.getprop('ro.product.cpu.abi'))
-            return self.abi_version
-        else:
-            return getattr(self, '_abi_version')
+
+        return getattr(self, '_abi_version')
 
     @property
     def displayInfo(self) -> Dict[str, Union[int, float]]:
