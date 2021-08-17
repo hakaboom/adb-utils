@@ -13,14 +13,13 @@ from adbutils.extra.performance.fps import Fps
 
 device = ADBDevice(device_id='emulator-5554')
 
-fps_watcher = Fps(device=device)
+fps_watcher = Fps(device)
 fps_ret = []
 pack = f"'SurfaceView - {device.foreground_package}/{device.foreground_activity}'"
 for i in range(600):
     fps = fps_watcher.get_fps_surfaceView(f"{pack}")
     if fps:
         fps_ret.append(fps)
-    print(f'当前FPS:{fps}')
     time.sleep(1)
 #
 print(f'最低FPS:{min(fps_ret)}\t'
