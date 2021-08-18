@@ -10,21 +10,30 @@ from loguru import logger
 
 from adbutils import ADBDevice
 from adbutils.extra.performance.fps import Fps
+from adbutils.extra.performance.meminfo import Meminfo
+from adbutils.extra.performance.top import Top
 
 device = ADBDevice(device_id='emulator-5554')
-
-
+mem_watcher = Meminfo(device)
 fps_watcher = Fps(device)
+cpu_watcher = Top(device)
 fps_ret = []
-pack = f"'SurfaceView - {device.foreground_package}/{device.foreground_activity}'"
-for i in range(600):
-    fps = fps_watcher.get_fps_surfaceView(f"{pack}")
-    if fps:
-        fps_ret.append(fps)
+
+package_name = device.foreground_package
+package_activity = device.foreground_activity
+while True:
+    fps, fTime, jank, bigJank, _ = fps_watcher.get_fps_surfaceView(f"'SurfaceView - {package_name}/{package_activity}'")
+    total_cpu_usage, cpu_core_usage, app_usage_ret = cpu_watcher.get_cpu_usage(package_name)
+    s = 'cpu={} core={}, {} PSS={:.1f}MB'.format(
+        f'{total_cpu_usage:.1f}%',
+        '\t'.join([f'cpu{core_index}:{usage:.1f}%' for core_index, usage in enumerate(cpu_core_usage)]),
+        '\t'.join([f'{name}:{usage:.1f}%' for name, usage in app_usage_ret.items()]),
+        int(mem_watcher.get_app_summary(package_name)['total']) / 1024
+    )
+    logger.debug(f'当前帧数:{fps:.2f}帧\t'
+                 f'最大渲染耗时:{fTime:.2f}ms\t'
+                 f'Jank:{jank}\t'
+                 f'BigJank:{bigJank}\n'
+                 f'{s}')
+
     time.sleep(1)
-#
-print(f'最低FPS:{min(fps_ret)}\t'
-      f'最大FPS:{max(fps_ret)}\t'
-      f'AvgFPS:{sum(fps_ret)/len(fps_ret)}\t'
-      f'FPS>=18:{len(list(filter(lambda num: num < 18, fps_ret))) / len(fps_ret) * 100:.2f}%\t'
-      f'FPS>=25:{len(list(filter(lambda num: num < 25, fps_ret))) / len(fps_ret) * 100:.2f}%')

@@ -68,15 +68,11 @@ class Fps(object):
         jank_vsync_frameTimes = self._get_frameTimes(jank_vsync_timestamps)
         _Jank, _BigJank, Jank_time = self._get_perfdog_jank(jank_vsync_frameTimes)
         _Stutter = Jank_time / seconds * 100
+
         # step End: 记录最后一帧时间戳
         self._last_drawEnd_timestamps = drawEnd_timestamps[-1]
 
-        logger.debug(f'当前帧数:{_Fps:.2f}帧\t'
-                     f'最大渲染耗时:{_FTime:.2f}ms\t'
-                     f'Jank:{_Jank}\t'
-                     f'BigJank:{_BigJank}\t'
-                     f'Stutter:{_Stutter:.2f}%')
-        return _Fps
+        return _Fps, _FTime, _Jank, _BigJank, _Stutter
 
     def _clear_surfaceFlinger_latency(self) -> bool:
         """
@@ -207,23 +203,4 @@ class Fps(object):
         bigJank = len(_bigJank)
         jank_time = sum(_jank) + sum(_bigJank)
 
-        # jank = 0
-        # bigJank = 0
-        # jank_time = 0
-        # for new, *last in zip(data[3:], data[2:], data[1:], data):
-        #     if new > ((sum(last) / 3) * 2):  # FrameTime>前三帧平均耗时2倍
-        #         if new >= self.Movie_FrameTime * 3:
-        #             bigJank += 1
-        #         elif new >= self.Movie_FrameTime * 2:
-        #             jank += 1
-
         return jank, bigJank, jank_time
-    #
-    # @staticmethod
-    # def _get_normalized_deltas(data, refresh_period, min_normalized_delta=None) -> Tuple[list, list]:
-    #     deltas = [t2 - t1 for t1, t2 in zip(data, data[1:])]
-    #     if min_normalized_delta is not None:
-    #         deltas = filter(lambda d: d / refresh_period >= min_normalized_delta,
-    #                         deltas)
-    #
-    #     return list(deltas), [delta / refresh_period for delta in list(deltas)]
