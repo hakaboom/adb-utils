@@ -11,7 +11,8 @@ from baseImage import Rect, Point
 
 from adbutils._utils import (get_adb_exe, split_cmd, _popen_kwargs, get_std_encoding, check_file)
 from adbutils.constant import (ANDROID_ADB_SERVER_HOST, ANDROID_ADB_SERVER_PORT, ADB_CAP_RAW_REMOTE_PATH,
-                               ADB_CAP_RAW_LOCAL_PATH, IP_PATTERN, ADB_DEFAULT_KEYBOARD)
+                               ADB_CAP_RAW_LOCAL_PATH, IP_PATTERN, ADB_DEFAULT_KEYBOARD, ANDROID_TMP_PATH,
+                               ADB_KEYBOARD_APK_PATH)
 from adbutils.exceptions import (AdbError, AdbShellError, AdbBaseError, AdbTimeout, NoDeviceSpecifyError,
                                  AdbDeviceConnectError, AdbInstallError, AdbSDKVersionError, AdbExtraModuleNotFount)
 from adbutils._wraps import retries
@@ -434,9 +435,8 @@ class ADBShell(ADBClient):
                 line_breaker = '\r' + os.linesep
             line_breaker = line_breaker.encode("ascii")
             setattr(self, '_line_breaker', line_breaker)
-            return self.line_breaker
-        else:
-            return getattr(self, '_line_breaker')
+
+        return getattr(self, '_line_breaker')
 
     @property
     def memory(self) -> str:
@@ -1156,6 +1156,22 @@ class ADBShell(ADBClient):
         packages = [p.split(":")[1] for p in packages if p]
         return packages
 
+    def broadcast(self, action: str, user: str = None) -> None:
+        """
+        发送广播信号
+
+        Args:
+            action: 需要触发的广播行为
+            user: 向指定组件广播
+
+        Returns:
+            None
+        """
+        cmds = ['am', 'broadcast'] + ['-a', action]
+        if user:
+            cmds += ['-n', user]
+        self.start_cmd(cmds)
+
     def shell(self, cmds: Union[list, str], decode: Optional[bool] = True, skip_error: Optional[bool] = False) \
             -> Union[str, bytes]:
         """
@@ -1223,6 +1239,19 @@ class ADBShell(ADBClient):
 
 
 class ADBDevice(ADBShell):
+    def __init__(self, device_id: Optional[str] = None, adb_path: Optional[str] = None,
+                 host: Optional[str] = ANDROID_ADB_SERVER_HOST,
+                 port: Optional[int] = ANDROID_ADB_SERVER_PORT):
+        """
+        Args:
+            device_id (str): 指定设备名
+            adb_path (str): 指定adb路径
+            host (str): 指定连接地址
+            port (int): 指定连接端口
+        """
+        super(ADBDevice, self).__init__(device_id=device_id, adb_path=adb_path, host=host, port=port)
+        self.set_input_method(ime_method=ADB_DEFAULT_KEYBOARD, ime_apk_path=ADB_KEYBOARD_APK_PATH)
+
     def screenshot(self, rect: Union[Rect, Tuple[int, int, int, int], List[int]] = None) -> np.ndarray:
         """
         command 'adb screencap'
@@ -1386,6 +1415,7 @@ class ADBDevice(ADBShell):
     def text(self, text, enter: Optional[bool] = False):
         """
         input text on the device
+        预置命令: #CLEAR# 清除当前输入框内所有字符。在使用原生input时不能保证百分百清空输入框数据
 
         Args:
             text: 需要输入的字符
@@ -1395,12 +1425,21 @@ class ADBDevice(ADBShell):
             None
         """
         if self.default_ime == ADB_DEFAULT_KEYBOARD:
-            self.shell(f"am broadcast -a ADB_INPUT_TEXT --es msg '{str(text)}'")
+            if text == '#CLEAR#':
+                self.broadcast('ADB_CLEAR_TEXT')
+            else:
+                self.shell(f"am broadcast -a ADB_INPUT_TEXT --es msg '{str(text)}'")
         else:
-            self.shell(['input', 'text', str(text)])
+            if text == '#CLEAR#':
+                logger.warning('建议使用AdbKeyboard')
+                for i in range(255):
+                    self.keyevent('KEYCODE_CLEAR')
+            else:
+                self.shell(['input', 'text', str(text)])
 
         if enter:
-            self.shell(['input', 'keyevent', 'ENTER'])
+            time.sleep(1)
+            self.keyevent('ENTER')
 
 
 class ADBExtraDevice(ADBDevice):

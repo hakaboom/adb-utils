@@ -21,7 +21,8 @@ ADB_CAP_RAW_LOCAL_PATH = './{device_id}.raw'
 ADB_CAP_LOCAL_PATH = './{device_id}.png'
 
 ADB_DEFAULT_KEYBOARD = 'com.android.adbkeyboard/.AdbIME'
-ADB_KEYBOARD_APK_PATH = os.path.join(STATICPATH, "ADBKeyboard.apk")
+ADB_KEYBOARD_APK_PATH = os.path.join(STATICPATH, 'ADBKeyboard.apk')
+
 ADB_INSTALL_FAILED = {
     "INSTALL_FAILED_ALREADY_EXISTS": "应用已经存在，或卸载了但没卸载干净;建议使用'-r'安装",
     "INSTALL_FAILED_INVALID_APK": "无效的 APK 文件",
