@@ -1,0 +1,8 @@
+baseImage==1.0.6
+colorama==0.4.4
+loguru==0.5.3
+numpy==1.21.2
+opencv-python==4.5.3.56
+pydantic==1.8.2
+typing-extensions==3.10.0.0
+win32-setctime==1.0.3
