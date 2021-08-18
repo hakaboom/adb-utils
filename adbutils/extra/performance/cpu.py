@@ -11,7 +11,7 @@ from adbutils.extra.performance.exceptions import AdbNoInfoReturn
 from loguru import logger
 
 
-class Top(object):
+class Cpu(object):
     # user/nice/system/idle/iowait/irq/softirq/stealstolen/guest
     cpu_jiffies_pattern = re.compile(r'(\d+)')
     total_cpu_pattern = re.compile(r'cpu\s+(.*)')
@@ -218,11 +218,11 @@ class Top(object):
 
 if __name__ == '__main__':
     from adbutils import ADBDevice
-    from adbutils.extra.performance.top import Top
+    from adbutils.extra.performance.cpu import Cpu
 
     device_id = ''
     device = ADBDevice(device_id=device_id)
-    top_watcher = Top(device)
+    top_watcher = Cpu(device)
 
     while True:
         total_cpu_usage, cpu_core_usage, app_usage_ret = top_watcher.get_cpu_usage(device.foreground_package)
