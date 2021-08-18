@@ -11,12 +11,12 @@ from loguru import logger
 from adbutils import ADBDevice
 from adbutils.extra.performance.fps import Fps
 from adbutils.extra.performance.meminfo import Meminfo
-from adbutils.extra.performance.top import Top
+from adbutils.extra.performance.cpu import Cpu
 
 device = ADBDevice(device_id='emulator-5554')
 mem_watcher = Meminfo(device)
 fps_watcher = Fps(device)
-cpu_watcher = Top(device)
+cpu_watcher = Cpu(device)
 fps_ret = []
 
 package_name = device.foreground_package
