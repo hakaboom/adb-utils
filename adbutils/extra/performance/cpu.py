@@ -40,7 +40,7 @@ class Cpu(object):
         # step1: 转换name为pid
         if isinstance(name, (str, int)):
             name = [name]
-        pid_list = self._transform_name_to_pid(name)
+        pid_list = name and self._transform_name_to_pid(name) or []
 
         # step2: 运行命令,获得cpu信息
         try:
