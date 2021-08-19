@@ -30,15 +30,19 @@ class DeviceWatcher(object):
 
         self._kill_event = Event()
         self._wait_event = Event()
+        self._wait_event.set()
 
-        self._cpu_watcher_thread = None
-        self._fps_watcher_thread = None
-        self._mem_watcher_thread = None
+        self._cpu_watcher_thread: Thread = None
+        self._fps_watcher_thread: Thread = None
+        self._mem_watcher_thread: Thread = None
 
         self._cpu_usage_queue = Queue()
         self._mem_usage_queue = Queue()
 
-    def start_cpu_watcher(self):
+        self.create_cpu_watcher()
+        self.create_mem_watcher()
+
+    def create_cpu_watcher(self):
         def _get_cpu_usage():
             try:
                 total_cpu_usage, cpu_core_usage, app_usage_ret = self._cpu_watcher.get_cpu_usage(self._package_name)
@@ -58,9 +62,8 @@ class DeviceWatcher(object):
         self._cpu_watcher_thread = Thread(target=_run, name='cpu_watcher',
                                           args=(self._kill_event, self._wait_event, self._cpu_usage_queue))
         self._cpu_watcher_thread.daemon = True
-        self._cpu_watcher_thread.start()
 
-    def start_mem_watcher(self):
+    def create_mem_watcher(self):
         def _get_mem_usage():
             try:
                 app_mem = self._mem_watcher.get_app_summary(self._package_name)
@@ -80,30 +83,19 @@ class DeviceWatcher(object):
         self._mem_watcher_thread = Thread(target=_run, name='mem_watcher',
                                           args=(self._kill_event, self._wait_event, self._mem_usage_queue))
         self._mem_watcher_thread.daemon = True
-        self._mem_watcher_thread.start()
 
     def stop(self):
         self._kill_event.set()
 
     def start(self):
-        if not isinstance(self._cpu_watcher_thread, Thread):
-            self.start_cpu_watcher()
+        if not self._cpu_watcher_thread.is_alive():
+            self._cpu_watcher_thread.start()
 
-        if not isinstance(self._mem_watcher_thread, Thread):
-            self.start_mem_watcher()
-
-    def run(self):
-        self.start_cpu_watcher()
-        self.start_mem_watcher()
-
-        while True:
-            self._wait_event.clear()
-
-            self._wait_event.set()
-            logger.info('===================')
-            time.sleep(1)
+        if not self._mem_watcher_thread.is_alive():
+            self._mem_watcher_thread.start()
 
 
 device = ADBDevice(device_id='emulator-5554')
 a = DeviceWatcher(device)
 a.start()
+time.sleep(2)

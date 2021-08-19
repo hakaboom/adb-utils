@@ -405,7 +405,7 @@ class ADBClient(object):
             cmd_options = self.cmd_options
 
         cmds = cmd_options + cmds
-        logger.info(' '.join(cmds))
+        # logger.info(' '.join(cmds))
         proc = subprocess.Popen(
             cmds,
             stdin=subprocess.PIPE,

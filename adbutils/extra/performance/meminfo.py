@@ -92,7 +92,7 @@ class Meminfo(object):
         if m := self._parse_system_meminfo(meminfo):
             return self._pares_memory(m.group('lost_ram'))
 
-    def get_app_meminfo(self, package: Union[str, int]) -> Dict[str, Dict[str, int]]:
+    def get_app_meminfo(self, package: Union[str, int]) -> Optional[Dict[str, Dict[str, int]]]:
         """
          获取指定包或进程号的内存信息
          键为内存条目名称
@@ -104,6 +104,8 @@ class Meminfo(object):
         Returns:
             以字典返回所有内存信息
         """
+        if not package:
+            return None
         ret = {}
         _memory_info_count = 7
         param_list = ('pss_total', 'private_dirty', 'private_clean', 'swapPss_dirty',
@@ -122,7 +124,7 @@ class Meminfo(object):
                 ret[name] = {param_list[index]: v for index, v in enumerate([int(v) for v in mem])}
         return ret
 
-    def get_app_summary(self, package: Union[str, int]) -> Dict[str, int]:
+    def get_app_summary(self, package: Union[str, int]) -> Optional[Dict[str, int]]:
         """
         获取app summary pss。
         返回一个包含java_heap/native_heap/code/stack/graphics/private_other/system/total/total_swap_pss的字典
@@ -133,6 +135,8 @@ class Meminfo(object):
         Returns:
             app内存信息概要
         """
+        if not package:
+            return None
         ret = {}
         if meminfo := self._get_app_meminfo(package):
             meminfo = self._parse_app_meminfo(meminfo)
@@ -204,7 +208,7 @@ class Meminfo(object):
         Returns:
             内存信息
         """
-        if 'No process found for:' in (ret := self.device.shell(['dumpsys', 'meminfo', str(package)])):
+        if 'No process found for:' in (ret := self.device.shell(['dumpsys', 'meminfo', package])):
             raise AdbProcessNotFound(ret)
         else:
             return ret
