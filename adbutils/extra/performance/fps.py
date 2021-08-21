@@ -92,7 +92,7 @@ class Fps(object):
         Returns:
             sufaceFlinger stat
         """
-        if ret := self.device.shell(['dumpsys', 'SurfaceFlinger', '--latency', surface_name]):
+        if ret := self.device.shell(['dumpsys', 'SurfaceFlinger', '--latency', self._pares_activity_name(surface_name)]):
             return ret
         logger.warning('warning to get surfaceFlinger try again')
         return self._get_surfaceFlinger_stat(surface_name)
@@ -206,7 +206,7 @@ class Fps(object):
 
         return jank, bigJank, jank_time
 
-    def get_layers_from_buffering(self) -> List[str]:
+    def get_layers_from_buffering(self) -> Optional[List[str]]:
         """
         command 'adb shell dumpsys SurfaceFlinger' 从缓冲信息中(Buffering stats)，找到所有层级名
 
@@ -251,3 +251,50 @@ class Fps(object):
             ret.append(name)
 
         return ret
+
+    def check_activity_usable(self, layers: List[str]) -> List[Optional[str]]:
+        """
+        检查activity是否有效,command 'adb shell dumpsys SurfaceFlinge --latency <activity>'
+        如果只返回了刷新周期,则认为该activity无效
+
+        Args:
+            layers: 需要检查的activity列表
+
+        Returns:
+            满足条件的activity
+        """
+        ret = []
+        for activity_name in layers:
+            if stat := self._get_surfaceFlinger_stat(activity_name):
+                stat_len = len(stat.splitlines())
+                if stat_len == 1:
+                    continue
+                else:
+                    ret.append(activity_name)
+
+        return ret
+
+    @staticmethod
+    def _pares_activity_name(name: str = None) -> Optional[str]:
+        """
+        检查activity名是否符合标准
+
+        Args:
+            name: activity名
+
+        Returns:
+            处理后的activity名
+        """
+        if not name or not isinstance(name, str):
+            return None
+
+        # 检查包含空格的activity是否使用冒号包裹
+        pattern = re.compile(r"^'(.*)'$")
+        if pattern.search(name):
+            return name
+
+        pattern = re.compile('\s')
+        if pattern.search(name):
+            name = f"'{name}'"
+
+        return name
