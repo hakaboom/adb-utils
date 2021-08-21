@@ -227,8 +227,7 @@ if __name__ == '__main__':
     from adbutils import ADBDevice
     from adbutils.extra.performance.meminfo import Meminfo
 
-    device_id = ''
-    device = ADBDevice(device_id=device_id)
+    device = ADBDevice(device_id='')
     performance = Meminfo(device)
 
     performance.get_system_meminfo()
