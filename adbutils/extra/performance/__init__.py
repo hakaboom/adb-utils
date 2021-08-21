@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import time
 from threading import Thread, Event
 from queue import Queue
 
@@ -10,9 +11,12 @@ from adbutils.extra.performance.cpu import Cpu
 from adbutils.extra.performance.fps import Fps
 from adbutils.extra.performance.meminfo import Meminfo
 
+__all__ = ['DeviceWatcher']
+
 
 class DeviceWatcher(object):
-    def __init__(self, device: ADBDevice, package_name: str = None):
+    def __init__(self, device: ADBDevice, package_name: str = None, surfaceView_name: str = None):
+        self._surfaceView_name = surfaceView_name
         self._package_name = package_name
         self._device = device
 
@@ -32,10 +36,22 @@ class DeviceWatcher(object):
         self._mem_wait_event.set()
         self._mem_watcher_thread: Thread = self.create_mem_watcher()
 
-        self._fps_watcher_thread: Thread = None
+        self._fps_usage_queue = Queue()
+        self._fps_wait_event = Event()
+        self._fps_wait_event.set()
+        self._fps_watcher_thread: Thread = self.create_fps_watcher()
 
-        self.create_cpu_watcher()
-        self.create_mem_watcher()
+        if not self._surfaceView_name and self._package_name:
+            layers = self._fps_watcher.get_possible_layer(self._package_name)
+            surfaceViews = self._fps_watcher.check_activity_usable(layers)
+            if len(surfaceViews) == 1:
+                self._surfaceView_name = surfaceViews[0]
+            elif len(surfaceViews) > 1:
+                self._surfaceView_name = surfaceViews[0]
+                logger.warning("检测到多个activity: {}".format(
+                    "\t".join(surfaceViews)
+                ))
+            logger.debug(f'自动设置监控activity={self._surfaceView_name}')
 
     def create_cpu_watcher(self) -> Thread:
         """
@@ -46,8 +62,8 @@ class DeviceWatcher(object):
         """
         def _get_cpu_usage():
             try:
-                total_cpu_usage, cpu_core_usage, app_usage_ret = self._cpu_watcher.get_cpu_usage(self._package_name)
-                return total_cpu_usage, cpu_core_usage, app_usage_ret
+                # total_cpu_usage, cpu_core_usage, app_usage_ret
+                return self._cpu_watcher.get_cpu_usage(self._package_name)
             except AdbBaseError as err:
                 logger.error(err)
             return None
@@ -55,7 +71,6 @@ class DeviceWatcher(object):
         def _run(kill_event: Event, wait_event: Event, q: Queue):
             while not kill_event.is_set():
                 if not wait_event.is_set():
-                    logger.debug('put cpu')
                     if cpu_usage := _get_cpu_usage():
                         q.put(cpu_usage)
                     else:
@@ -76,8 +91,10 @@ class DeviceWatcher(object):
         """
         def _get_mem_usage():
             try:
-                app_mem = self._mem_watcher.get_app_summary(self._package_name)
-                return app_mem
+                if self._package_name:
+                    return self._mem_watcher.get_app_summary(self._package_name)
+                else:
+                    return None
             except AdbBaseError as err:
                 logger.error(err)
             return None
@@ -85,7 +102,6 @@ class DeviceWatcher(object):
         def _run(kill_event: Event, wait_event: Event, q: Queue):
             while not kill_event.is_set():
                 if not wait_event.is_set():
-                    logger.debug('put mem')
                     if app_mem := _get_mem_usage():
                         q.put(app_mem)
                     else:
@@ -104,6 +120,28 @@ class DeviceWatcher(object):
         Returns:
             fps监控线程
         """
+        def _get_fps_usage():
+            try:
+                if self._surfaceView_name:
+                    return self._fps_watcher.get_fps_surfaceView(f"{self._surfaceView_name}")
+                return None
+            except AdbBaseError as err:
+                logger.error(err)
+            return None
+
+        def _run(kill_event: Event, wait_event: Event, q: Queue):
+            while not kill_event.is_set():
+                if not wait_event.is_set():
+                    if fps_info := _get_fps_usage():
+                        q.put(fps_info)
+                    else:
+                        q.put(None)
+                    wait_event.set()
+
+        _t = Thread(target=_run, name='mem_watcher',
+                    args=(self._kill_event, self._fps_wait_event, self._fps_usage_queue))
+        _t.daemon = True
+        return _t
 
     def stop(self):
         self._kill_event.set()
@@ -115,7 +153,11 @@ class DeviceWatcher(object):
         if not self._mem_watcher_thread.is_alive():
             self._mem_watcher_thread.start()
 
-    def get_usage(self):
+        if not self._fps_watcher_thread.is_alive():
+            self._fps_watcher_thread.start()
+            self._fps_watcher.clear_surfaceFlinger_latency()
+
+    def get(self):
         """
 
         Returns:
@@ -123,8 +165,45 @@ class DeviceWatcher(object):
         """
         self._mem_wait_event.clear()
         self._cpu_wait_event.clear()
+        self._fps_wait_event.clear()
 
         cpu_usage = self._cpu_usage_queue.get()
         mem_usage = self._mem_usage_queue.get()
+        fps_info = self._fps_usage_queue.get()
 
-        return cpu_usage, mem_usage
+        return cpu_usage, mem_usage, fps_info
+
+
+
+if __name__ == '__main__':
+    from adbutils import ADBDevice
+    from adbutils.extra.performance import DeviceWatcher
+    device = ADBDevice(device_id='')
+    a = DeviceWatcher(device, package_name=device.foreground_package)
+    a.start()
+
+    while True:
+        start_time = time.time()
+        cpu_usage, mem_usage, fps_info = a.get()
+        delay_time = time.time() - start_time
+
+        log = []
+        if cpu_usage:
+            total_cpu_usage, cpu_core_usage, app_usage_ret = cpu_usage
+            log.append('cpu={} core={}, {}'.format(
+                f'{total_cpu_usage:.1f}%',
+                '\t'.join([f'cpu{core_index}:{usage:.1f}%' for core_index, usage in enumerate(cpu_core_usage)]),
+                '\t'.join([f'{name}:{usage:.1f}%' for name, usage in app_usage_ret.items()]),
+            ))
+
+        if fps_info:
+            fps, fTime, jank, bigJank, _ = fps_info
+        else:
+            fps = fTime = 0
+        log.append(f'fps={fps:.1f}, 最大延迟={fTime:.2f}ms')
+
+        logger.debug('\t'.join(log))
+        if (sleep := (1 - delay_time)) > 0:
+            time.sleep(sleep)
+        else:
+            time.sleep(1)
