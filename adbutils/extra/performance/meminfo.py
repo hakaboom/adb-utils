@@ -209,7 +209,7 @@ class Meminfo(object):
             内存信息
         """
         if 'No process found for:' in (ret := self.device.shell(['dumpsys', 'meminfo', package])):
-            raise AdbProcessNotFound(ret)
+            raise AdbProcessNotFound(ret.strip())
         else:
             return ret
 

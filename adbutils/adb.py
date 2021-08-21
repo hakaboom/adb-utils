@@ -405,7 +405,7 @@ class ADBClient(object):
             cmd_options = self.cmd_options
 
         cmds = cmd_options + cmds
-        logger.info(' '.join(cmds))
+        # logger.info(' '.join(cmds))
         proc = subprocess.Popen(
             cmds,
             stdin=subprocess.PIPE,
@@ -905,10 +905,12 @@ class ADBShell(ADBClient):
         """
         if fuzzy_search:
             return [(int(proc[self.PS_HEAD.index('pid')]), proc_name) for proc in self.get_process()
-                    if packageName in (proc_name := proc[self.PS_HEAD.index('name')])]
+                    if len(proc) < len(self.PS_HEAD) and
+                    (packageName == (proc_name := proc[self.PS_HEAD.index('name')]))]
         else:
             return [(int(proc[self.PS_HEAD.index('pid')]), proc_name) for proc in self.get_process()
-                    if packageName == (proc_name := proc[self.PS_HEAD.index('name')])]
+                    if len(proc) == len(self.PS_HEAD) and
+                    (packageName == (proc_name := proc[self.PS_HEAD.index('name')]))]
 
     def get_process(self, flag_options: Union[str, list, tuple, None] = None) -> List[List[str]]:
         """
