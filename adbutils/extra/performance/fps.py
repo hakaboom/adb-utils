@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import re
 import time
 from typing import Optional, Union, List, Tuple
 
@@ -134,26 +135,26 @@ class Fps(object):
         refresh_period = int(stat[0]) / self.nanoseconds_per_second
 
         # 清除无用的空数据
-        empty_data = ['0', '0', '0']
+        empty_data = [0, 0, 0]
+        pattern = re.compile(r'(\d+)\s*(\d+)\s*(\d+)')
         for line in stat[1:]:
-            fields = line.split()
             # 确认数据结构,与数据是否有效
-            if (len(fields) != 3) or (fields == empty_data):
+            fields = pattern.search(line)
+            if not fields:
+                continue
+            
+            # 判断数据是否有效
+            fields = [int(v) for v in fields.groups()]
+            if fields == empty_data or self.pending_fence_timestamp in fields:
                 continue
 
-            drawStart_timestamp = int(fields[0])
-            if drawStart_timestamp == self.pending_fence_timestamp:  # 忽略异常数据
-                continue
+            drawStart_timestamp = fields[0]
             drawStart_timestamp /= self.nanoseconds_per_second
 
-            vsync_timestamp = int(fields[1])
-            if vsync_timestamp == self.pending_fence_timestamp:  # 忽略异常数据
-                continue
+            vsync_timestamp = fields[1]
             vsync_timestamp /= self.nanoseconds_per_second
 
-            drawEnd_timestamp = int(fields[2])
-            if drawEnd_timestamp == self.pending_fence_timestamp:  # 忽略异常数据
-                continue
+            drawEnd_timestamp = fields[2]
             drawEnd_timestamp /= self.nanoseconds_per_second
 
             drawStart_timestamps.append(drawStart_timestamp)
