@@ -405,7 +405,7 @@ class ADBClient(object):
             cmd_options = self.cmd_options
 
         cmds = cmd_options + cmds
-        # logger.info(' '.join(cmds))
+        logger.info(' '.join(cmds))
         proc = subprocess.Popen(
             cmds,
             stdin=subprocess.PIPE,
@@ -475,37 +475,82 @@ class ADBShell(ADBClient):
         return getattr(self, '_cpu_coreNum')
 
     @property
-    def cpu_max_freq(self) -> int:
+    def cpu_max_freq(self) -> List[Optional[int]]:
         """
-        获取cpu最高频率
+        获取cpu各核心的最高频率
 
+        Raises:
+            AdbBaseError: 获取cpu信息失败
         Returns:
-            最高频率
+            包含核心最高频率的列表
         """
-        if ret := self.shell("cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq"):
-            return int(int(ret) / 1000)
+        _cores = []
+        cmds = [f"cat /sys/devices/system/cpu/cpu{i}/cpufreq/scaling_max_freq" for i in range(self.cpu_coreNum)]
+        cmds = '&'.join(cmds)
+
+        ret = self.shell(cmds)
+        if not ret:
+            raise AdbBaseError('get cpufreq error')
+
+        pattern = re.compile('(\d+)')
+        if ret := pattern.findall(ret):
+            _cores = [int(int(core) / 1000) for core in ret]
+        else:
+            raise AdbBaseError('get cpufreq error')
+
+        return _cores
 
     @property
-    def cpu_min_freq(self) -> int:
+    def cpu_min_freq(self) -> List[Optional[int]]:
         """
-        获取cpu最低频率
+        获取cpu各核心的最低频率
 
+        Raises:
+            AdbBaseError: 获取cpu信息失败
         Returns:
-            最低频率
+            包含核心最低频率的列表
         """
-        if ret := self.shell("cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_min_freq"):
-            return int(int(ret) / 1000)
+        _cores = []
+        cmds = [f"cat /sys/devices/system/cpu/cpu{i}/cpufreq/scaling_min_freq" for i in range(self.cpu_coreNum)]
+        cmds = '&'.join(cmds)
+
+        ret = self.shell(cmds)
+        if not ret:
+            raise AdbBaseError('get cpufreq error')
+
+        pattern = re.compile('(\d+)')
+        if ret := pattern.findall(ret):
+            _cores = [int(int(core) / 1000) for core in ret]
+        else:
+            raise AdbBaseError('get cpufreq error')
+
+        return _cores
 
     @property
-    def cpu_cur_freq(self) -> int:
+    def cpu_cur_freq(self) -> List[Optional[int]]:
         """
-        获取cpu当前频率
+        获取cpu各核心的当前频率
 
+        Raises:
+            AdbBaseError: 获取cpu信息失败
         Returns:
-            当前频率
+            包含核心当前频率的列表
         """
-        if ret := self.shell("cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_cur_freq"):
-            return int(int(ret) / 1000)
+        _cores = []
+        cmds = [f"cat /sys/devices/system/cpu/cpu{i}/cpufreq/scaling_cur_freq" for i in range(self.cpu_coreNum)]
+        cmds = '&'.join(cmds)
+
+        ret = self.shell(cmds)
+        if not ret:
+            raise AdbBaseError('get cpufreq error')
+
+        pattern = re.compile('(\d+)')
+        if ret := pattern.findall(ret):
+            _cores = [int(int(core) / 1000) for core in ret]
+        else:
+            raise AdbBaseError('get cpufreq error')
+
+        return _cores
 
     @property
     def cpu_abi(self) -> str:
@@ -732,7 +777,7 @@ class ADBShell(ADBClient):
         if m := self._get_activityRecord(key='mResumedActivity'):
             return m.group('activity')
         else:
-            raise AdbBaseError(f'get foreground_activity unknown error: {m}')
+            raise AdbBaseError(f'running_activities get None')
 
     @property
     def foreground_package(self) -> str:
@@ -747,27 +792,37 @@ class ADBShell(ADBClient):
         if m := self._get_activityRecord(key='mResumedActivity'):
             return m.group('packageName')
         else:
-            raise AdbBaseError(f'get foreground_package unknown error: {m}')
+            raise AdbBaseError(f'running_activities get None')
 
     @property
     def running_activities(self) -> List[str]:
         """
         获取正在运行的所有activity
 
+        Raises:
+            AdbBaseError: 未获取到当前运行的activity
         Returns:
             所有正在运行的activity
         """
-        return [match.group('activity') for match in self._get_running_activities()]
+        if m := self._get_running_activities():
+            return [match.group('activity') for match in m]
+        else:
+            raise AdbBaseError(f'running_activities get None')
 
     @property
     def running_package(self) -> List[str]:
         """
         获取正在运行的所有包名
 
+        Raises:
+            AdbBaseError: 未获取到当前运行的包名
         Returns:
             所有正在运行的包名
         """
-        return [match.group('packageName') for match in self._get_running_activities()]
+        if m := self._get_running_activities():
+            return [match.group('packageName') for match in m]
+        else:
+            raise AdbBaseError(f'running_activities get None')
 
     @property
     def default_ime(self) -> str:
