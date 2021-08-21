@@ -75,7 +75,7 @@ class Fps(object):
 
         return _Fps, _FTime, _Jank, _BigJank, _Stutter
 
-    def _clear_surfaceFlinger_latency(self) -> bool:
+    def clear_surfaceFlinger_latency(self) -> bool:
         """
         command 'adb shell dumpsys SurfaceFlinger --latency-clear' 清除SurfaceFlinger latency里的数据
 
@@ -205,3 +205,49 @@ class Fps(object):
         jank_time = sum(_jank) + sum(_bigJank)
 
         return jank, bigJank, jank_time
+
+    def get_layers_from_buffering(self) -> List[str]:
+        """
+        command 'adb shell dumpsys SurfaceFlinger' 从缓冲信息中(Buffering stats)，找到所有层级名
+
+        Returns:
+            所有层级名
+        """
+        ret = self.device.shell(['dumpsys', 'SurfaceFlinger'])
+        buffering_stats_pattern = re.compile(r'Buffering stats:(.*)Visible layers', re.DOTALL)
+
+        if not (buffering_stats := buffering_stats_pattern.search(ret)):
+            logger.error('buffering_stats not found')
+            return None
+        buffering_stats = buffering_stats.group(1)
+        buffering_stats = buffering_stats.strip().splitlines()
+
+        layers = []
+        buffer_pattern = re.compile(r'\[(.*)].*')
+        for line in buffering_stats[1:]:
+            if layer_name := buffer_pattern.search(line):
+                layers.append(layer_name.group(1))
+
+        return layers
+
+    def get_possible_layer(self, name: str) -> List[str]:
+        """
+        通过Buffering stats,查找到与<name>相似的层级名
+
+        Args:
+            name: 层级名
+
+        Returns:
+            包含可能层级的列表
+        """
+        layers = self.get_layers_from_buffering()
+
+        ret = []
+        for layer_name in layers:
+            if name in layer_name:
+                ret.append(layer_name)
+
+        if not ret:
+            ret.append(name)
+
+        return ret
