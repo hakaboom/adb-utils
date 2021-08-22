@@ -935,7 +935,7 @@ class ADBShell(ADBClient):
 
         return process
 
-    def _get_running_activities(self) -> Optional[Iterator[Match[str]]]:
+    def _get_running_activities(self) -> Optional[List[Match[str]]]:
         """
         command 'adb dumpsys activity activities'
         获取各个Stack中正在运行的activities参数
@@ -944,14 +944,12 @@ class ADBShell(ADBClient):
             包含了多个Match的迭代器, Match可以使用memory/user/packageName/activity/task
         """
         running_activities = []
-        stack_index = 1  # 需要获取的Stack
         cmds = ['dumpsys', 'activity', 'activities']
         activities = self.shell(cmds)
         # 获取Stack
-        pattern = re.compile(r'Stack #([\d+]):')
+        pattern = re.compile(r'Stack #([\d]+):')
         stack = pattern.findall(activities)
         if not stack:
-            # TODO: 好像不可能获取不到,没获取到直接弹异常
             return None
         stack.sort()
         # 根据Stack拆分running activities
@@ -960,19 +958,16 @@ class ADBShell(ADBClient):
             ret = pattern.findall(activities)
             if ret:
                 running_activities.append(ret[0])
-        # 获取stack_index对应的activities
-        if len(running_activities) < stack_index:
-            # TODO: 是否需要考虑这种情况
-            return None
-        activities = running_activities[stack_index]
-        pattern = re.compile(
-            r"TaskRecord[\s\S]+?Run #(?P<index>[\d+]):[\s]?"
-            r"ActivityRecord\{(?P<memory>.*) (?P<user>.*) (?P<packageName>.*)/\.?(?P<activity>.*) (?P<task>.*)}")
 
-        if ret := pattern.finditer(activities):
-            return ret
-        else:
-            return None
+        ret = []
+        pattern = re.compile(
+            r"TaskRecord[\s\S]+?Run #(?P<index>\d+):[\s]?"
+            r"ActivityRecord\{(?P<memory>.*) (?P<user>.*) (?P<packageName>.*)/(?P<activity>\.?.*) (?P<task>.*)}")
+        for v in running_activities:
+            if m := pattern.search(v):
+                ret.append(m)
+
+        return ret
 
     def _get_activityRecord(self, key: str) -> Optional[Match[str]]:
         """
