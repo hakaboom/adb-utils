@@ -5,6 +5,7 @@ import threading
 from loguru import logger
 from adbutils.constant import (ANDROID_TMP_PATH, MNC_REMOTE_PATH, MNC_SO_REMOTE_PATH, MNC_CMD, MNC_CAP_LOCAL_PATH,
                                MNC_LOCAL_NAME, MNC_LOCAL_PATH, MNC_SO_LOCAL_PATH)
+from adbutils.extra.minicap.exceptions import MinicapStartError, MinicapServerConnectError
 from adbutils import ADBDevice
 from adbutils._utils import NonBlockingStreamReader, reg_cleanup, SafeSocket
 from adbutils._wraps import threadsafe_generator
@@ -26,23 +27,28 @@ class Minicap(object):
             rotation_watcher: 方向监控函数
         """
         self.device = device
-        self.MNC_LOCAL_NAME = MNC_LOCAL_NAME.format(device_id=self.device.device_id)
-        self.MNC_PORT = 0
+        self.MNC_LOCAL_NAME = MNC_LOCAL_NAME.format(device_id=self.device.device_id)  # minicap在设备上的转发名
+        self.MNC_PORT = None  # minicap在电脑上使用的端口
         self.quirk_flag = 0
+        self.server_flag = False  # 判断minicap服务是否启动
         self.proc = None
         self.nbsp = None
+
         self._update_rotation_event = threading.Event()
         if rotation_watcher:
             rotation_watcher.reg_callback(lambda x: self.update_rotation(x * 90))
         self._install_minicap()
-        # self.start_server()
+
+    def __str__(self):
+        return f"<minicap ({self.server_flag and 'Start' or 'Close'})> port:{self.MNC_PORT}" \
+               f"\tlocal_name:{self.MNC_LOCAL_NAME}"
 
     def start_server(self) -> None:
         """
         开启minicap服务
 
         Raises:
-            RuntimeError: 启动服务超时
+            MinicapStartError: minicap server start error
         Returns:
             None
         """
@@ -55,18 +61,39 @@ class Minicap(object):
         while True:
             line = nbsp.readline(timeout=5)
             if line is None:
-                raise RuntimeError("minicap server setup timeout")
+                raise MinicapStartError("minicap server setup timeout")
+            if b'have different types' in line:
+                raise MinicapStartError("minicap server setup error")
             if b"Server start" in line:
                 logger.info('minicap server setup')
                 break
 
         if proc.poll() is not None:
-            raise RuntimeError('minicap server quit immediately')
+            raise MinicapStartError('minicap server quit immediately')
         reg_cleanup(proc.kill)
         time.sleep(.5)
         # self.proc = proc
         # self.nbsp = nbsp
-        logger.info(f"port={self.MNC_PORT}")
+        self.server_flag = True
+
+    def teardown(self) -> None:
+        """
+        关闭minicap服务
+
+        Returns:
+            None
+        """
+        logger.debug('minicap server teardown')
+        if self.proc:
+            self.proc.kill()
+
+        if self.nbsp:
+            self.nbsp.kill()
+
+        if self.MNC_PORT and self.device.get_forward_port(remote=self.MNC_LOCAL_NAME):
+            self.device.remove_forward(local=f'tcp:{self.MNC_PORT}')
+
+        self.server_flag = False
 
     def _set_minicap_forward(self):
         """
@@ -76,9 +103,13 @@ class Minicap(object):
             None
         """
         # teardown服务后,保留端口信息,用于下次启动
+        remote = f'localabstract:{self.MNC_LOCAL_NAME}'
+        if port := self.device.get_forward_port(remote=remote, device_id=self.device.device_id):
+            self.MNC_PORT = port
+            return
+
         self.MNC_PORT = self.MNC_PORT or self.device.get_available_forward_local()
-        self.device.forward(local=f'tcp:{self.MNC_PORT}',
-                            remote=f'localabstract:{self.MNC_LOCAL_NAME}')
+        self.device.forward(local=f'tcp:{self.MNC_PORT}', remote=remote)
 
     def _install_minicap(self) -> None:
         """
@@ -119,19 +150,6 @@ class Minicap(object):
 
         return params
 
-    def teardown(self) -> None:
-        """
-        关闭minicap服务
-
-        Returns:
-            None
-        """
-        if self.proc:
-            self.proc.kill()
-        if self.nbsp:
-            self.nbsp.kill()
-        self.device.remove_forward(local=f'tcp:{self.MNC_PORT}')
-
     def update_rotation(self, rotation):
         """
         更新屏幕方向
@@ -157,7 +175,12 @@ class Minicap(object):
             self.teardown()
             self.start_server()
             self._update_rotation_event.clear()
-        return self._get_frame()
+
+        try:
+            return self._get_frame()
+        except (ConnectionRefusedError, OSError) as err:
+            self.teardown()
+            raise MinicapServerConnectError(f'{err}')
 
     def _get_frame(self):
         s = SafeSocket()
@@ -188,6 +211,26 @@ class Minicap(object):
                 s.close()
                 return frame_data
 
-        logger.info('get_frame ends')
+        logger.info('minicap get_frame ends')
         s.close()
         self.teardown()
+
+
+if __name__ == '__main__':
+    import cv2
+    from baseImage import IMAGE
+
+    from adbutils import ADBDevice
+    from adbutils.extra.minicap import Minicap
+
+    device = ADBDevice(device_id='emulator-5554')
+    minicap = Minicap(device)
+    minicap.start_server()
+
+    while True:
+        if img := minicap.get_frame():
+            cv2.imshow('test', IMAGE(img).imread())
+
+        if cv2.waitKey(25) & 0xFF == ord('q'):
+            cv2.destroyAllWindows()
+            minicap.teardown()

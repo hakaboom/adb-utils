@@ -5,7 +5,7 @@ import socket
 import os
 import time
 import warnings
-
+#TODO: pm install/uninstall
 import numpy as np
 from baseImage import Rect, Point
 
@@ -183,6 +183,7 @@ class ADBClient(object):
                 forwards[value[0]] += [(value[1], value[2])]
             else:
                 forwards[value[0]] = [(value[1], value[2])]
+
         return forwards
 
     def get_forward_port(self, remote: str, device_id: Optional[str] = None) -> Optional[int]:
@@ -196,15 +197,12 @@ class ADBClient(object):
             本地端口号
         """
         forwards = self.get_forwards(device_id=device_id)
+        local_pattern = re.compile(r'tcp:(\d+)')
         for device_id, value in forwards.items():
             if isinstance(value, (list, tuple)):
                 for _local, _remote in value:
-                    if _remote == remote:
-                        #  解析local
-                        pattern = re.compile(r'tcp:(\d+)')
-                        ret = pattern.findall(_local)
-                        if ret:
-                            return int(ret[0])
+                    if (_remote == remote) and (ret := local_pattern.search(_local)):
+                        return int(ret.group(1))
         return None
 
     def get_available_forward_local(self) -> int:
@@ -405,7 +403,7 @@ class ADBClient(object):
             cmd_options = self.cmd_options
 
         cmds = cmd_options + cmds
-        # logger.info(' '.join(cmds))
+        logger.info(' '.join(cmds))
         proc = subprocess.Popen(
             cmds,
             stdin=subprocess.PIPE,
@@ -875,6 +873,12 @@ class ADBShell(ADBClient):
 
         if m := pattern.search(ret):
             return m.group('Bool') == 'true'
+        else:
+            # MIUI11
+            screenOnRE = re.compile('screenState=(SCREEN_STATE_ON|SCREEN_STATE_OFF)')
+            m = screenOnRE.search(self.shell('dumpsys window policy'))
+            if m:
+                return m.group(1) == 'SCREEN_STATE_ON'
         raise AdbBaseError('Could not determine screen ON state')
 
     def is_locked(self) -> bool:
@@ -903,14 +907,13 @@ class ADBShell(ADBClient):
         Returns:
             获取到的进程列表(pid, name)
         """
+        ps_len = len(self.PS_HEAD)
         if fuzzy_search:
             return [(int(proc[self.PS_HEAD.index('pid')]), proc_name) for proc in self.get_process()
-                    if len(proc) < len(self.PS_HEAD) and
-                    (packageName == (proc_name := proc[self.PS_HEAD.index('name')]))]
+                    if len(proc) == ps_len and (packageName in (proc_name := proc[self.PS_HEAD.index('name')]))]
         else:
             return [(int(proc[self.PS_HEAD.index('pid')]), proc_name) for proc in self.get_process()
-                    if len(proc) == len(self.PS_HEAD) and
-                    (packageName == (proc_name := proc[self.PS_HEAD.index('name')]))]
+                    if len(proc) == ps_len and (packageName == (proc_name := proc[self.PS_HEAD.index('name')]))]
 
     def get_process(self, flag_options: Union[str, list, tuple, None] = None) -> List[List[str]]:
         """
@@ -941,7 +944,7 @@ class ADBShell(ADBClient):
         获取各个Stack中正在运行的activities参数
 
         Returns:
-            包含了多个Match的迭代器, Match可以使用memory/user/packageName/activity/task
+            包含了多个Match的列表, Match可以使用memory/user/packageName/activity/task
         """
         running_activities = []
         cmds = ['dumpsys', 'activity', 'activities']
@@ -988,17 +991,17 @@ class ADBShell(ADBClient):
         else:
             return None
 
-    def check_app(self, package: str) -> bool:
+    def check_app(self, name: str) -> bool:
         """
-        command 'adb shell
+        判断应用是否安装
 
         Args:
-            package: package name
+            name: package name
 
         Returns:
             return True if find, false otherwise
         """
-        if package in self.app_list():
+        if name in self.app_list():
             return True
         return False
 

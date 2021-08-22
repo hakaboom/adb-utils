@@ -6,11 +6,12 @@ import re
 import sys
 import time
 
+import cv2
 from loguru import logger
 
-from adbutils import ADBDevice, ADBClient
+from baseImage import IMAGE
 
-device = ADBDevice('192.168.50.164:5555')
-print(device.running_activities)
+from adbutils import ADBDevice
 
+device = ADBDevice(device_id='emulator-5554')
 
