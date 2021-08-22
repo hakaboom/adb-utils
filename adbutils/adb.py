@@ -405,7 +405,7 @@ class ADBClient(object):
             cmd_options = self.cmd_options
 
         cmds = cmd_options + cmds
-        logger.info(' '.join(cmds))
+        # logger.info(' '.join(cmds))
         proc = subprocess.Popen(
             cmds,
             stdin=subprocess.PIPE,
@@ -475,37 +475,82 @@ class ADBShell(ADBClient):
         return getattr(self, '_cpu_coreNum')
 
     @property
-    def cpu_max_freq(self) -> int:
+    def cpu_max_freq(self) -> List[Optional[int]]:
         """
-        获取cpu最高频率
+        获取cpu各核心的最高频率
 
+        Raises:
+            AdbBaseError: 获取cpu信息失败
         Returns:
-            最高频率
+            包含核心最高频率的列表
         """
-        if ret := self.shell("cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq"):
-            return int(int(ret) / 1000)
+        _cores = []
+        cmds = [f"cat /sys/devices/system/cpu/cpu{i}/cpufreq/scaling_max_freq" for i in range(self.cpu_coreNum)]
+        cmds = '&'.join(cmds)
+
+        ret = self.shell(cmds)
+        if not ret:
+            raise AdbBaseError('get cpufreq error')
+
+        pattern = re.compile('(\d+)')
+        if ret := pattern.findall(ret):
+            _cores = [int(int(core) / 1000) for core in ret]
+        else:
+            raise AdbBaseError('get cpufreq error')
+
+        return _cores
 
     @property
-    def cpu_min_freq(self) -> int:
+    def cpu_min_freq(self) -> List[Optional[int]]:
         """
-        获取cpu最低频率
+        获取cpu各核心的最低频率
 
+        Raises:
+            AdbBaseError: 获取cpu信息失败
         Returns:
-            最低频率
+            包含核心最低频率的列表
         """
-        if ret := self.shell("cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_min_freq"):
-            return int(int(ret) / 1000)
+        _cores = []
+        cmds = [f"cat /sys/devices/system/cpu/cpu{i}/cpufreq/scaling_min_freq" for i in range(self.cpu_coreNum)]
+        cmds = '&'.join(cmds)
+
+        ret = self.shell(cmds)
+        if not ret:
+            raise AdbBaseError('get cpufreq error')
+
+        pattern = re.compile('(\d+)')
+        if ret := pattern.findall(ret):
+            _cores = [int(int(core) / 1000) for core in ret]
+        else:
+            raise AdbBaseError('get cpufreq error')
+
+        return _cores
 
     @property
-    def cpu_cur_freq(self) -> int:
+    def cpu_cur_freq(self) -> List[Optional[int]]:
         """
-        获取cpu当前频率
+        获取cpu各核心的当前频率
 
+        Raises:
+            AdbBaseError: 获取cpu信息失败
         Returns:
-            当前频率
+            包含核心当前频率的列表
         """
-        if ret := self.shell("cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_cur_freq"):
-            return int(int(ret) / 1000)
+        _cores = []
+        cmds = [f"cat /sys/devices/system/cpu/cpu{i}/cpufreq/scaling_cur_freq" for i in range(self.cpu_coreNum)]
+        cmds = '&'.join(cmds)
+
+        ret = self.shell(cmds)
+        if not ret:
+            raise AdbBaseError('get cpufreq error')
+
+        pattern = re.compile('(\d+)')
+        if ret := pattern.findall(ret):
+            _cores = [int(int(core) / 1000) for core in ret]
+        else:
+            raise AdbBaseError('get cpufreq error')
+
+        return _cores
 
     @property
     def cpu_abi(self) -> str:
@@ -732,7 +777,7 @@ class ADBShell(ADBClient):
         if m := self._get_activityRecord(key='mResumedActivity'):
             return m.group('activity')
         else:
-            raise AdbBaseError(f'get foreground_activity unknown error: {m}')
+            raise AdbBaseError(f'running_activities get None')
 
     @property
     def foreground_package(self) -> str:
@@ -747,27 +792,37 @@ class ADBShell(ADBClient):
         if m := self._get_activityRecord(key='mResumedActivity'):
             return m.group('packageName')
         else:
-            raise AdbBaseError(f'get foreground_package unknown error: {m}')
+            raise AdbBaseError(f'running_activities get None')
 
     @property
     def running_activities(self) -> List[str]:
         """
         获取正在运行的所有activity
 
+        Raises:
+            AdbBaseError: 未获取到当前运行的activity
         Returns:
             所有正在运行的activity
         """
-        return [match.group('activity') for match in self._get_running_activities()]
+        if m := self._get_running_activities():
+            return [match.group('activity') for match in m]
+        else:
+            raise AdbBaseError(f'running_activities get None')
 
     @property
     def running_package(self) -> List[str]:
         """
         获取正在运行的所有包名
 
+        Raises:
+            AdbBaseError: 未获取到当前运行的包名
         Returns:
             所有正在运行的包名
         """
-        return [match.group('packageName') for match in self._get_running_activities()]
+        if m := self._get_running_activities():
+            return [match.group('packageName') for match in m]
+        else:
+            raise AdbBaseError(f'running_activities get None')
 
     @property
     def default_ime(self) -> str:
@@ -850,10 +905,12 @@ class ADBShell(ADBClient):
         """
         if fuzzy_search:
             return [(int(proc[self.PS_HEAD.index('pid')]), proc_name) for proc in self.get_process()
-                    if packageName in (proc_name := proc[self.PS_HEAD.index('name')])]
+                    if len(proc) < len(self.PS_HEAD) and
+                    (packageName == (proc_name := proc[self.PS_HEAD.index('name')]))]
         else:
             return [(int(proc[self.PS_HEAD.index('pid')]), proc_name) for proc in self.get_process()
-                    if packageName == (proc_name := proc[self.PS_HEAD.index('name')])]
+                    if len(proc) == len(self.PS_HEAD) and
+                    (packageName == (proc_name := proc[self.PS_HEAD.index('name')]))]
 
     def get_process(self, flag_options: Union[str, list, tuple, None] = None) -> List[List[str]]:
         """
@@ -878,7 +935,7 @@ class ADBShell(ADBClient):
 
         return process
 
-    def _get_running_activities(self) -> Optional[Iterator[Match[str]]]:
+    def _get_running_activities(self) -> Optional[List[Match[str]]]:
         """
         command 'adb dumpsys activity activities'
         获取各个Stack中正在运行的activities参数
@@ -887,14 +944,12 @@ class ADBShell(ADBClient):
             包含了多个Match的迭代器, Match可以使用memory/user/packageName/activity/task
         """
         running_activities = []
-        stack_index = 1  # 需要获取的Stack
         cmds = ['dumpsys', 'activity', 'activities']
         activities = self.shell(cmds)
         # 获取Stack
-        pattern = re.compile(r'Stack #([\d+]):')
+        pattern = re.compile(r'Stack #([\d]+):')
         stack = pattern.findall(activities)
         if not stack:
-            # TODO: 好像不可能获取不到,没获取到直接弹异常
             return None
         stack.sort()
         # 根据Stack拆分running activities
@@ -903,19 +958,16 @@ class ADBShell(ADBClient):
             ret = pattern.findall(activities)
             if ret:
                 running_activities.append(ret[0])
-        # 获取stack_index对应的activities
-        if len(running_activities) < stack_index:
-            # TODO: 是否需要考虑这种情况
-            return None
-        activities = running_activities[stack_index]
-        pattern = re.compile(
-            r"TaskRecord[\s\S]+?Run #(?P<index>[\d+]):[\s]?"
-            r"ActivityRecord\{(?P<memory>.*) (?P<user>.*) (?P<packageName>.*)/\.?(?P<activity>.*) (?P<task>.*)}")
 
-        if ret := pattern.finditer(activities):
-            return ret
-        else:
-            return None
+        ret = []
+        pattern = re.compile(
+            r"TaskRecord[\s\S]+?Run #(?P<index>\d+):[\s]?"
+            r"ActivityRecord\{(?P<memory>.*) (?P<user>.*) (?P<packageName>.*)/(?P<activity>\.?.*) (?P<task>.*)}")
+        for v in running_activities:
+            if m := pattern.search(v):
+                ret.append(m)
+
+        return ret
 
     def _get_activityRecord(self, key: str) -> Optional[Match[str]]:
         """
