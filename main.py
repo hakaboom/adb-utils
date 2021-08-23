@@ -6,12 +6,11 @@ import re
 import sys
 import time
 
-import cv2
 from loguru import logger
 
-from baseImage import IMAGE
+from adbutils import ADBDevice, ADBClient
+from adbutils.extra.performance.meminfo import Meminfo
 
-from adbutils import ADBDevice
-
-device = ADBDevice(device_id='emulator-5554')
-
+device = ADBDevice('emulator-5554')
+meminfo = Meminfo(device)
+print(meminfo.get_app_meminfo(device.foreground_package))

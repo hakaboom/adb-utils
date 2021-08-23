@@ -108,20 +108,29 @@ class Meminfo(object):
             return None
         ret = {}
         _memory_info_count = 7
-        param_list = ('pss_total', 'private_dirty', 'private_clean', 'swapPss_dirty',
-                      'heap_size', 'heap_alloc', 'heap_free')
         if meminfo := self._get_app_meminfo(package):
             meminfo = self._parse_app_meminfo(meminfo)
-            meminfo = meminfo.group('meminfo')
+            meminfo = meminfo.group('meminfo').strip()
+            meminfo = meminfo.splitlines()
+            # get meminfo head
+            head_pattern = re.compile(r'(\S+)')
+            headLine = [f'{t_1.lower()}_{t_2.lower()}' for t_1, t_2 in
+                        zip(head_pattern.findall(meminfo[0].strip()), head_pattern.findall(meminfo[1].strip()))]
+
             pattern = re.compile(r'\s*(\S+\s?\S*)\s*(.*)\r?')
-            for line in pattern.findall(meminfo):
-                _meminfo = line[1]
+            for line in meminfo[3:]:
+                line = pattern.search(line)
+                if not line:
+                    continue
+
                 mem_pattern = re.compile(r'(\d+)\s*')
-                mem = mem_pattern.findall(_meminfo)
+                mem = mem_pattern.findall(line.group(2).strip())
+                # 将无内存信息的,补全0
                 mem += [0 for _ in range(_memory_info_count - len(mem))]
 
-                name = line[0].strip().lower().replace(' ', '_')
-                ret[name] = {param_list[index]: v for index, v in enumerate([int(v) for v in mem])}
+                name = line.group(1).strip().lower().replace(' ', '_')
+
+                ret[name] = {headLine[index]: v for index, v in enumerate([int(v) for v in mem])}
         return ret
 
     def get_app_summary(self, package: Union[str, int]) -> Optional[Dict[str, int]]:
@@ -188,9 +197,6 @@ class Meminfo(object):
     def _parse_app_meminfo(meminfo: str):
         pattern = re.compile(r'Uptime: (?P<uptime>\d+) Realtime: (?P<realtime>\d+)'
                              r'.*\*\* MEMINFO in pid (?P<pid>\d+) \[(?P<package_name>\S+)] \*\*'
-                             r'.*Pss\s*Private\s*Private\s*SwapPss\s*Heap\s*Heap\s*Heap'
-                             r'.*Total\s*Dirty\s*Clean\s*Dirty\s*Size\s*Alloc\s*Free'
-                             r'.*------\s*------\s*------\s*------\s*------\s*------\s*------'
                              r'(?P<meminfo>.*)'
                              r'.*App Summary\s*(?P<app_summary>.*)'
                              r'.*Objects(.*)', re.DOTALL)
