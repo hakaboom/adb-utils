@@ -10,6 +10,11 @@
 ## Installation
 pip3 install adb-utils
 
+## TODO
+- [ ] minicap集成
+- [ ] minitouch集成
+- [ ] 设备性能数据可视化
+- [ ] 基于PYQT的设备管理工具
 
 ## 备注
 由于工作内容,对于低版本android不打算做适配
