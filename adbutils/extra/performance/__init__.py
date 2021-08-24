@@ -42,15 +42,10 @@ class DeviceWatcher(object):
         self._fps_watcher_thread: Thread = self.create_fps_watcher()
 
         if not self._surfaceView_name and self._package_name:
-            layers = self._fps_watcher.get_possible_layer(self._package_name)
-            surfaceViews = self._fps_watcher.check_activity_usable(layers)
-            if len(surfaceViews) == 1:
-                self._surfaceView_name = surfaceViews[0]
-            elif len(surfaceViews) > 1:
-                self._surfaceView_name = surfaceViews[0]
-                logger.warning("检测到多个activity: {}".format(
-                    "\t".join(surfaceViews)
-                ))
+            if layers := self._fps_watcher.get_possible_activity():
+                surfaceViews = self._fps_watcher.check_activity_usable(layers)
+                if self._package_name in surfaceViews:
+                    self._surfaceView_name = surfaceViews
             logger.debug(f'自动设置监控activity={self._surfaceView_name}')
 
     def create_cpu_watcher(self) -> Thread:
@@ -154,8 +149,9 @@ class DeviceWatcher(object):
             self._mem_watcher_thread.start()
 
         if not self._fps_watcher_thread.is_alive():
-            self._fps_watcher_thread.start()
             self._fps_watcher.clear_surfaceFlinger_latency()
+            self._fps_watcher_thread.start()
+
 
     def get(self):
         """
@@ -178,7 +174,7 @@ class DeviceWatcher(object):
 if __name__ == '__main__':
     from adbutils import ADBDevice
     from adbutils.extra.performance import DeviceWatcher
-    device = ADBDevice(device_id='')
+    device = ADBDevice(device_id='11081FDD40012V')
     a = DeviceWatcher(device, package_name=device.foreground_package)
     a.start()
 
