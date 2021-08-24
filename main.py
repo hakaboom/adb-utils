@@ -9,8 +9,11 @@ import time
 from loguru import logger
 
 from adbutils import ADBDevice, ADBClient
-from adbutils.extra.performance.meminfo import Meminfo
+from adbutils.extra.performance.fps import Fps
+
 
 device = ADBDevice('emulator-5554')
-meminfo = Meminfo(device)
-print(meminfo.get_app_meminfo(device.foreground_package))
+fps = Fps(device)
+# layers = fps.get_possible_layer(device.foreground_package)
+print(fps.get_layers_from_buffering())
+

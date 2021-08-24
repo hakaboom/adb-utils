@@ -55,6 +55,7 @@ class DeviceWatcher(object):
         Returns:
             cpu监控线程
         """
+
         def _get_cpu_usage():
             try:
                 # total_cpu_usage, cpu_core_usage, app_usage_ret
@@ -84,6 +85,7 @@ class DeviceWatcher(object):
         Returns:
             内存监控线程
         """
+
         def _get_mem_usage():
             try:
                 if self._package_name:
@@ -115,6 +117,7 @@ class DeviceWatcher(object):
         Returns:
             fps监控线程
         """
+
         def _get_fps_usage():
             try:
                 if self._surfaceView_name:
@@ -152,7 +155,6 @@ class DeviceWatcher(object):
             self._fps_watcher.clear_surfaceFlinger_latency()
             self._fps_watcher_thread.start()
 
-
     def get(self):
         """
 
@@ -170,11 +172,11 @@ class DeviceWatcher(object):
         return cpu_usage, mem_usage, fps_info
 
 
-
 if __name__ == '__main__':
     from adbutils import ADBDevice
     from adbutils.extra.performance import DeviceWatcher
-    device = ADBDevice(device_id='11081FDD40012V')
+
+    device = ADBDevice(device_id='')
     a = DeviceWatcher(device, package_name=device.foreground_package)
     a.start()
 

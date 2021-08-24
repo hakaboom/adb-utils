@@ -93,7 +93,7 @@ class Fps(object):
             sufaceFlinger stat
         """
         ret = self.device.shell(['dumpsys', 'SurfaceFlinger', '--latency', self._pares_activity_name(surface_name)])
-        if len(ret.splitlines())>1:
+        if len(ret.splitlines()) > 1:
             return ret
         surface_name = self.get_possible_activity() or surface_name
         logger.warning('warning to get surfaceFlinger try again')
@@ -208,14 +208,13 @@ class Fps(object):
 
         return jank, bigJank, jank_time
 
-
     def get_possible_activity(self) -> Optional[str]:
-        '''
+        """
         通过 ‘dumpsys SurfaceFlinger --list',查找到当前最顶部层级名
 
         Returns:
             包含可能层级
-        '''
+        """
         ret = self.device.shell(['dumpsys', 'SurfaceFlinger', '--list']).strip().splitlines()
         # 特殊适配谷歌手机
         if self.device.manufacturer == 'Google':
@@ -224,7 +223,7 @@ class Fps(object):
         else:
             buffering_stats_pattern = re.compile(r'SurfaceView -.*', re.DOTALL)
         for layer in ret:
-            if layers:=buffering_stats_pattern.search(layer):
+            if layers := buffering_stats_pattern.search(layer):
                 return layers.group()
         logger.error("Don't find SurfaceView")
 
@@ -234,7 +233,7 @@ class Fps(object):
         如果只返回了刷新周期,则认为该activity无效
 
         Args:
-            layers: 需要检查的activity列表
+            activity_name: 需要检查的activity名
 
         Returns:
             满足条件的activity
@@ -245,25 +244,25 @@ class Fps(object):
                 return activity_name
 
     @staticmethod
-    def _pares_activity_name(name: str = None) -> Optional[str]:
+    def _pares_activity_name(activity_name: str = None) -> Optional[str]:
         """
         检查activity名是否符合标准
 
         Args:
-            name: activity名
+            activity_name: activity名
 
         Returns:
             处理后的activity名
         """
-        if not name or not isinstance(name, str):
+        if not activity_name or not isinstance(activity_name, str):
             return ''
 
         # 检查是否使用冒号包裹
         pattern = re.compile(r"^'(.*)'$")
-        if pattern.search(name):
-            return name
+        if pattern.search(activity_name):
+            return activity_name
         # 包含空格和小括号都要被冒号包裹
-        pattern = re.compile('\s|\(')
-        if pattern.search(name):
-            name = f"'{name}'"
-        return name
+        pattern = re.compile(r'\s|\(')
+        if pattern.search(activity_name):
+            activity_name = f"'{activity_name}'"
+        return activity_name
