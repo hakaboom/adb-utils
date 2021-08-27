@@ -10,7 +10,7 @@
 ## Installation
 pip3 install adb-utils
 
-## TODO
+## TODO (9月计划)
 - [ ] minicap集成
 - [ ] minitouch集成
 - [ ] 设备性能数据可视化
