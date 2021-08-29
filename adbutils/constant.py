@@ -3,7 +3,8 @@ import os
 import re
 
 IP_PATTERN = re.compile(r'(\d+\.){3}\d+')
-STATICPATH = os.path.join(os.path.abspath('adbutils'), 'static')
+THISPATH = os.path.dirname(os.path.realpath(__file__))
+STATICPATH = os.path.join(THISPATH, 'static')
 DEFAULT_ADB_PATH = {
     "Windows": os.path.join(STATICPATH, "adb", "windows", 'adb'),
     "Darwin": os.path.join(STATICPATH, "adb", "mac", "adb"),
