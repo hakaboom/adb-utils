@@ -1,1 +1,7 @@
-recursive-include adbutils *
+include requirements.txt
+recursive-include adbutils/static *
+include adbutils/static/*/*/*
+include adbutils/static/*/*
+include adbtuils/static/stf_libs/minicap-shared/aosp/libs/*/*/*.*
+
+include adbtuils/extra *
