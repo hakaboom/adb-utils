@@ -3,7 +3,7 @@
 对adb常用接口的二次开发
 
 ## Requirements
-- 开发时使用的是python3.8, 大概python 3.6+都可以
+- python>=3.8
 - 项目里用到了[base_image](https://github.com/hakaboom/base_image) 因此需要额外安装opencv-python,后续会想办法优化掉
 
 
