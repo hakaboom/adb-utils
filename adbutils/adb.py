@@ -65,7 +65,9 @@ class ADBClient(object):
     def server_version(self) -> int:
         """
         获得cmd version
-        :return: adb server版本
+
+        Returns:
+            adb server版本
         """
         ret = self.cmd('version', devices=False)
         pattern = re.compile(r'Android Debug Bridge version \d.\d.(\d+)')
