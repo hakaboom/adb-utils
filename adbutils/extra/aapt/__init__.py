@@ -13,7 +13,7 @@ class Aapt(object):
         self.device = device
         self._install_aapt()
 
-    def get_app_info(self, name: str) -> Dict[str, str]:
+    def get_app_info(self, name: str) -> Dict[str, Optional[str]]:
         """
         获取app信息
 
@@ -24,43 +24,39 @@ class Aapt(object):
             app信息, 包含:package_name/versionCode/versionName/sdkVersion/targetSdkVersion/app_name/launchable_activity
         """
         app_info = self._get_app_info(name)
-        if m := self._parse_app_info(app_info):
-            try:
-                app_name = m.group('app_name_zh')
-            except IndexError:
-                app_name = m.group('app_name')
+        ret = {'sdkVersion': None, 'targetSdkVersion': None, 'launchable_activity': None}
 
-            return {
-                'package_name': m.group('package_name'),
-                'versionCode': m.group('versionCode'),
-                'versionName': m.group('versionName'),
-                'sdkVersion': m.group('sdkVersion'),
-                'targetSdkVersion': m.group('targetSdkVersion'),
-                'app_name': app_name,
-                'launchable_activity': m.group('launchable_activity'),
-            }
-
-    @staticmethod
-    def _parse_app_info(app_info: str) -> Optional[Match[str]]:
-        """
-        解析aapt d badging获取到的应用信息
-
-        Args:
-            app_info: aapt获取到的应用信息
-
-        Returns:
-
-        """
         pattern = re.compile(r'package: name=\'(?P<package_name>\S*)\' '
                              r'versionCode=\'(?P<versionCode>\S*)\' '
-                             r'versionName=\'(?P<versionName>\S*)\''
-                             r'.*sdkVersion:\'(?P<sdkVersion>\d+)\''
-                             r'.*targetSdkVersion:\'(?P<targetSdkVersion>\d+)\''
-                             r'.*application-label-zh:\'(?P<app_name_zh>\S+)\''
-                             r'.*application: label=\'(?P<app_name>\S*)\''
-                             r'.*launchable-activity: name=\'(?P<launchable_activity>\S*)\'', re.DOTALL)
-        m = pattern.search(app_info)
-        return m if m else None
+                             r'versionName=\'(?P<versionName>[\s\S]*)\' '
+                             r'platformBuildVersionName=\'(?P<platformBuildVersionName>\S*)\'')
+        if info := pattern.search(app_info):
+            for key, value in info.groupdict().items():
+                ret[key] = value
+
+        sdkVersionRE = re.compile(r'sdkVersion:\'(?P<sdkVersion>\d+)\'')
+        if sdkVersionInfo := sdkVersionRE.search(app_info):
+            ret['sdkVersion'] = sdkVersionInfo.group('sdkVersion')
+
+        targetSdkVersionRE = re.compile(r'targetSdkVersion:\'(?P<targetSdkVersion>\d+)\'')
+        if targetSdkVersionInfo := targetSdkVersionRE.search(app_info):
+            ret['targetSdkVersion'] = targetSdkVersionInfo.group('targetSdkVersion')
+
+        localesLabelRE = re.compile(r"application-label-(\S*):\'([ \S]+)\'")
+        localesLabel = localesLabelRE.findall(app_info)
+        for locales, name in localesLabel:
+            if locales == 'zh':
+                ret['app_name'] = name
+        if not ret.get('app_name'):
+            applicationLabelRE = re.compile(r"application: label=\'(?P<app_name>[ \S]+)\' icon")
+            applicationLabel = applicationLabelRE.search(app_info).group('app_name')
+            ret['app_name'] = applicationLabel
+
+        launchableActivityRE = re.compile(r'launchable-activity: name=\'(?P<launchable_activity>\S*)\'')
+        if launchableActivityInfo := launchableActivityRE.search(app_info):
+            ret['launchable_activity'] = launchableActivityInfo.group('launchable_activity')
+
+        return ret
 
     def _get_app_info(self, name: str) -> Optional[str]:
         app_path = self.device.get_app_install_path(name)

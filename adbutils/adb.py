@@ -5,7 +5,7 @@ import socket
 import os
 import time
 import warnings
-#TODO: pm install/uninstall
+# TODO: pm install/uninstall
 import numpy as np
 from baseImage import Rect, Point
 
