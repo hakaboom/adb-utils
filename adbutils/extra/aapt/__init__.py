@@ -24,36 +24,42 @@ class Aapt(object):
             app信息, 包含:package_name/versionCode/versionName/sdkVersion/targetSdkVersion/app_name/launchable_activity
         """
         app_info = self._get_app_info(name)
+
         ret = {'sdkVersion': None, 'targetSdkVersion': None, 'launchable_activity': None}
 
-        pattern = re.compile(r'package: name=\'(?P<package_name>\S*)\' '
-                             r'versionCode=\'(?P<versionCode>\S*)\' '
-                             r'versionName=\'(?P<versionName>[\s\S]*)\' '
-                             r'platformBuildVersionName=\'(?P<platformBuildVersionName>\S*)\'')
-        if info := pattern.search(app_info):
-            for key, value in info.groupdict().items():
+        # step1: 获取几个基础参数
+        if baseInfo := re.compile(r'package: name=\'(?P<package_name>\S*)\' '
+                                  r'versionCode=\'(?P<versionCode>\S*)\' '
+                                  r'versionName=\'(?P<versionName>[\s\S]*)\' '
+                                  r'platformBuildVersionName=\'(?P<platformBuildVersionName>\S*)\'').search(app_info):
+            for key, value in baseInfo.groupdict().items():
                 ret[key] = value
 
-        sdkVersionRE = re.compile(r'sdkVersion:\'(?P<sdkVersion>\d+)\'')
-        if sdkVersionInfo := sdkVersionRE.search(app_info):
+        # step2: 获取sdk版本
+        if sdkVersionInfo := re.compile(r'sdkVersion:\'(?P<sdkVersion>\d+)\'').search(app_info):
             ret['sdkVersion'] = sdkVersionInfo.group('sdkVersion')
 
-        targetSdkVersionRE = re.compile(r'targetSdkVersion:\'(?P<targetSdkVersion>\d+)\'')
-        if targetSdkVersionInfo := targetSdkVersionRE.search(app_info):
+        # step3: 获取目标sdk版本
+        if targetSdkVersionInfo := re.compile(r'targetSdkVersion:\'(?P<targetSdkVersion>\d+)\'').search(app_info):
             ret['targetSdkVersion'] = targetSdkVersionInfo.group('targetSdkVersion')
 
-        localesLabelRE = re.compile(r"application-label-(\S*):\'([ \S]+)\'")
-        localesLabel = localesLabelRE.findall(app_info)
+        # step4: 获取app名字
+        localesLabel = re.compile(r"application-label-(\S*):\'([ \S]+)\'").findall(app_info)
         for locales, name in localesLabel:
             if locales == 'zh':
                 ret['app_name'] = name
         if not ret.get('app_name'):
             applicationLabelRE = re.compile(r"application: label=\'(?P<app_name>[ \S]+)\' icon")
-            applicationLabel = applicationLabelRE.search(app_info).group('app_name')
-            ret['app_name'] = applicationLabel
+            ret['app_name'] = applicationLabelRE.search(app_info).group('app_name')
 
-        launchableActivityRE = re.compile(r'launchable-activity: name=\'(?P<launchable_activity>\S*)\'')
-        if launchableActivityInfo := launchableActivityRE.search(app_info):
+        # step5: 获取app的icon路径
+        if iconInfo := re.compile(r"application: label=\'(?P<app_name>[ \S]+)\' icon=\'(?P<icon>\S+)\'").\
+                search(app_info):
+            ret['icon'] = iconInfo.group('icon')
+
+        # step6: 获取app 启动的activity
+        if launchableActivityInfo := re.compile(r'launchable-activity: name=\'(?P<launchable_activity>\S*)\'').\
+                search(app_info):
             ret['launchable_activity'] = launchableActivityInfo.group('launchable_activity')
 
         return ret
