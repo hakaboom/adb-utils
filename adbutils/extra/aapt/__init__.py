@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from adbutils import ADBDevice
-from adbutils.constant import AAPT_LOCAL_PATH, AAPT_REMOTE_PATH, ANDROID_TMP_PATH
+from adbutils.constant import (AAPT_LOCAL_PATH, AAPT_REMOTE_PATH, ANDROID_TMP_PATH,
+                               BUSYBOX_REMOTE_PATH, BUSYBOX_LOCAL_PATH)
 from adbutils.exceptions import AdbBaseError
 
 from typing import Union, Tuple, List, Optional, Match, Dict
@@ -14,49 +15,46 @@ class Aapt(object):
 
     def __init__(self, device: ADBDevice):
         self.device = device
+        self._install_busyBox()
         self._install_aapt()
 
-        if not self.device.check_dir(path=ANDROID_TMP_PATH, name=self.ICON_DIR_NAME):
-            self.device.create_dir(path=ANDROID_TMP_PATH, name=self.ICON_DIR_NAME)
+        self.device.check_dir(path=ANDROID_TMP_PATH, name=self.ICON_DIR_NAME, flag=True)
 
-    def _get_app_icon(self, name: str):
+    def get_app_icon(self, packageName: str, local: str) -> None:
         """
-        获取app icon, 并且存放到/data/local/tmp/ICON/<name>路径下
+        获取应用icon,并存放到<local>路径
 
         Args:
-            name: app包名
+            packageName: app包名
+            local: 本地的路径
 
         Returns:
             None
         """
-        app_path = self.device.get_app_install_path(name)
-        if not app_path:
-            raise AdbBaseError(f"'{name}' install path not found")
-
-        app_info = self.get_app_info(name)
+        app_info = self.get_app_info(packageName)
         if app_icon_path := app_info.get('icon'):
-            # 查看icon下是否有包名文件夹
             save_dir = os.path.join(ANDROID_TMP_PATH, f'{self.ICON_DIR_NAME}/')
-            save_path = os.path.join(save_dir, name)
-            if not self.device.check_dir(path=save_dir, name=name):
-                self.device.create_dir(path=save_dir, name=name)
+            save_path = os.path.join(save_dir, packageName)
+            self.device.check_dir(save_dir, name=packageName, flag=True)
+            self.device.shell(cmds=[BUSYBOX_REMOTE_PATH, 'unzip', '-oq', app_info.get('install_path'),
+                                    f"\"{app_icon_path}\"", '-d', save_path])
+            time.sleep(.2)
+            pull_path = os.path.join(f'{save_path}/', app_icon_path)
+            self.device.pull(remote=pull_path, local=local)
 
-            cmds = ['unzip', '-o', app_path, f"\"{app_icon_path}\"", '-d', save_path]
-            self.device.shell(cmds=cmds)
-
-    def get_app_info(self, name: str) -> Dict[str, Optional[str]]:
+    def get_app_info(self, packageName: str) -> Dict[str, Optional[str]]:
         """
         获取app信息
 
         Args:
-            name: app包名
+            packageName: app包名
 
         Returns:
             app信息, 包含:package_name/versionCode/versionName/sdkVersion/targetSdkVersion/app_name/launchable_activity
         """
-        app_info = self._get_app_info(name)
-
-        ret = {'sdkVersion': None, 'targetSdkVersion': None, 'launchable_activity': None}
+        app_info = self._get_app_info(packageName)
+        ret = dict(sdkVersion=None, targetSdkVersion=None, launchable_activity=None, app_name=None, icon=None,
+                   install_path=self.device.get_app_install_path(packageName))
 
         # step1: 获取几个基础参数
         if baseInfo := re.compile(r'package: name=\'(?P<package_name>\S*)\' '
@@ -76,9 +74,9 @@ class Aapt(object):
 
         # step4: 获取app名字
         localesLabel = re.compile(r"application-label-(\S*):\'([ \S]+)\'").findall(app_info)
-        for locales, name in localesLabel:
+        for locales, packageName in localesLabel:
             if locales == 'zh':
-                ret['app_name'] = name
+                ret['app_name'] = packageName
         if not ret.get('app_name'):
             applicationLabelRE = re.compile(r"application: label=\'(?P<app_name>[ \S]+)\' icon")
             ret['app_name'] = applicationLabelRE.search(app_info).group('app_name')
@@ -95,11 +93,11 @@ class Aapt(object):
 
         return ret
 
-    def _get_app_info(self, name: str) -> Optional[str]:
-        app_path = self.device.get_app_install_path(name)
+    def _get_app_info(self, packageName: str) -> Optional[str]:
+        app_path = self.device.get_app_install_path(packageName)
         # badging: Print the label and icon for the app declared in APK.
         if not app_path:
-            raise AdbBaseError(f"'{name}' install path not found")
+            raise AdbBaseError(f"'{packageName}' install path not found")
 
         ret = self.device.shell(f'{AAPT_REMOTE_PATH} d badging {app_path}')
         return ret
@@ -144,3 +142,28 @@ class Aapt(object):
                 self.device.push(local=AAPT_LOCAL_PATH['x86'], remote=AAPT_REMOTE_PATH)
             time.sleep(1)
             self.device.shell(['chmod', '755', AAPT_REMOTE_PATH])
+
+    def _install_busyBox(self) -> None:
+        """
+        check if busyBox installed
+
+        Returns:
+            None
+        """
+        if not self.device.check_file(ANDROID_TMP_PATH, 'busybox'):
+            if 'v8' in self.device.abi_version:
+                local = BUSYBOX_LOCAL_PATH.format('v8l')
+            elif 'v7r' in self.device.abi_version:
+                local = BUSYBOX_LOCAL_PATH.format('v7r')
+            elif 'v7m' in self.device.abi_version:
+                local = BUSYBOX_LOCAL_PATH.format('v7m')
+            elif 'v7l' in self.device.abi_version:
+                local = BUSYBOX_LOCAL_PATH.format('v7l')
+            elif 'v5' in self.device.abi_version:
+                local = BUSYBOX_LOCAL_PATH.format('v5l')
+            else:
+                local = BUSYBOX_LOCAL_PATH.format('v8l')
+
+            self.device.push(local=local, remote=BUSYBOX_REMOTE_PATH)
+            time.sleep(1)
+            self.device.shell(['chmod', '755', BUSYBOX_REMOTE_PATH])

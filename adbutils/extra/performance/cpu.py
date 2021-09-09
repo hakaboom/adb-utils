@@ -120,31 +120,6 @@ class Cpu(object):
 
         return total_cpu_stat, core_cpu_stat, app_cpu_stat
 
-    def _install_busyBox(self) -> None:
-        """
-        check if busybox installed
-
-        Returns:
-            None
-        """
-        if not self.device.check_file(ANDROID_TMP_PATH, 'busybox'):
-            if 'v8' in self.device.abi_version:
-                local = BUSYBOX_LOCAL_PATH.format('v8l')
-            elif 'v7r' in self.device.abi_version:
-                local = BUSYBOX_LOCAL_PATH.format('v7r')
-            elif 'v7m' in self.device.abi_version:
-                local = BUSYBOX_LOCAL_PATH.format('v7m')
-            elif 'v7l' in self.device.abi_version:
-                local = BUSYBOX_LOCAL_PATH.format('v7l')
-            elif 'v5' in self.device.abi_version:
-                local = BUSYBOX_LOCAL_PATH.format('v5l')
-            else:
-                local = BUSYBOX_LOCAL_PATH.format('v8l')
-
-            self.device.push(local=local, remote=BUSYBOX_REMOTE_PATH)
-            time.sleep(1)
-            self.device.shell(['chmod', '755', BUSYBOX_REMOTE_PATH])
-
     def _pares_cpu_stat(self, stat: str) -> Tuple[List[int], List[List[int]]]:
         """
         处理cpu信息数据

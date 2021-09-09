@@ -1020,18 +1020,24 @@ class ADBShell(ADBClient):
         """
         return bool(self.raw_shell(['find', path, '-name', name]))
 
-    def check_dir(self, path: str, name: str) -> bool:
+    def check_dir(self, path: str, name: str, flag: bool = False) -> bool:
         """
         command 'adb shell cd <path>
 
         Args:
             path: 在设备上的路径
-            name: 需要检索的文件名
+            name: 需要检索的文件夹名
+            flag: 如果为True,则会在找不到文件夹时候创建一个新的
 
         Returns:
             bool 是否存在路径
         """
-        return bool(self.raw_shell(['find', path, '-maxdepth 1', '-type d', '-name', name]))
+        if not bool(self.raw_shell(['find', path, '-maxdepth 1', '-type d', '-name', name])):
+            if flag:
+                self.create_dir(path=path, name=name)
+            return False
+
+        return True
 
     def create_dir(self, path: str, name: str):
         """
