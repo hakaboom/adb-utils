@@ -1020,6 +1020,32 @@ class ADBShell(ADBClient):
         """
         return bool(self.raw_shell(['find', path, '-name', name]))
 
+    def check_dir(self, path: str, name: str) -> bool:
+        """
+        command 'adb shell cd <path>
+
+        Args:
+            path: 在设备上的路径
+            name: 需要检索的文件名
+
+        Returns:
+            bool 是否存在路径
+        """
+        return bool(self.raw_shell(['find', path, '-maxdepth 1', '-type d', '-name', name]))
+
+    def create_dir(self, path: str, name: str):
+        """
+        command 'adb shell mkdir
+
+        Args:
+            path: 在设备上的路径
+            name: 需要创建的文件夹名
+
+        Returns:
+            None
+        """
+        self.shell(cmds=['mkdir', '-m 755', os.path.join(path, name)])
+
     def getMaxXY(self) -> Tuple[int, int]:
         """
         获取屏幕可点击的最大长宽距离

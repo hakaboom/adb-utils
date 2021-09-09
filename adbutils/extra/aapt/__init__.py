@@ -5,13 +5,44 @@ from adbutils.exceptions import AdbBaseError
 
 from typing import Union, Tuple, List, Optional, Match, Dict
 import re
+import os
 import time
 
 
 class Aapt(object):
+    ICON_DIR_NAME = 'icon'
+
     def __init__(self, device: ADBDevice):
         self.device = device
         self._install_aapt()
+
+        if not self.device.check_dir(path=ANDROID_TMP_PATH, name=self.ICON_DIR_NAME):
+            self.device.create_dir(path=ANDROID_TMP_PATH, name=self.ICON_DIR_NAME)
+
+    def _get_app_icon(self, name: str):
+        """
+        获取app icon, 并且存放到/data/local/tmp/ICON/<name>路径下
+
+        Args:
+            name: app包名
+
+        Returns:
+            None
+        """
+        app_path = self.device.get_app_install_path(name)
+        if not app_path:
+            raise AdbBaseError(f"'{name}' install path not found")
+
+        app_info = self.get_app_info(name)
+        if app_icon_path := app_info.get('icon'):
+            # 查看icon下是否有包名文件夹
+            save_dir = os.path.join(ANDROID_TMP_PATH, f'{self.ICON_DIR_NAME}/')
+            save_path = os.path.join(save_dir, name)
+            if not self.device.check_dir(path=save_dir, name=name):
+                self.device.create_dir(path=save_dir, name=name)
+
+            cmds = ['unzip', '-o', app_path, f"\"{app_icon_path}\"", '-d', save_path]
+            self.device.shell(cmds=cmds)
 
     def get_app_info(self, name: str) -> Dict[str, Optional[str]]:
         """
