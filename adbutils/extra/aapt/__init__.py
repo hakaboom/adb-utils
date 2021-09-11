@@ -35,10 +35,15 @@ class Aapt(object):
         if app_icon_path := app_info.get('icon'):
             save_dir = os.path.join(ANDROID_TMP_PATH, f'{self.ICON_DIR_NAME}/')
             save_path = os.path.join(save_dir, packageName)
+            # step1: 检查保存路径下是否存在包名路径
             self.device.check_dir(save_dir, name=packageName, flag=True)
+
+            # step2: 解压缩base.apk里的icon文件,保存到save_path下
             self.device.shell(cmds=[BUSYBOX_REMOTE_PATH, 'unzip', '-oq', app_info.get('install_path'),
                                     f"\"{app_icon_path}\"", '-d', save_path])
             time.sleep(.2)
+
+            # step3: 将save_path下的png文件,pull到本地
             pull_path = os.path.join(f'{save_path}/', app_icon_path)
             self.device.pull(remote=pull_path, local=local)
 
@@ -55,7 +60,6 @@ class Aapt(object):
         app_info = self._get_app_info(packageName)
         ret = dict(sdkVersion=None, targetSdkVersion=None, launchable_activity=None, app_name=None, icon=None,
                    install_path=self.device.get_app_install_path(packageName))
-
         # step1: 获取几个基础参数
         if baseInfo := re.compile(r'package: name=\'(?P<package_name>\S*)\' '
                                   r'versionCode=\'(?P<versionCode>\S*)\' '
@@ -82,9 +86,8 @@ class Aapt(object):
             ret['app_name'] = applicationLabelRE.search(app_info).group('app_name')
 
         # step5: 获取app的icon路径
-        if iconInfo := re.compile(r"application: label=\'(?P<app_name>[ \S]+)\' icon=\'(?P<icon>\S+)\'").\
-                search(app_info):
-            ret['icon'] = iconInfo.group('icon')
+        if iconInfo := re.compile(r'application-icon-(\S*):\'(?P<icon>\S+)\'').findall(app_info):
+            ret['icon'] = iconInfo[-1][1]
 
         # step6: 获取app 启动的activity
         if launchableActivityInfo := re.compile(r'launchable-activity: name=\'(?P<launchable_activity>\S*)\'').\
