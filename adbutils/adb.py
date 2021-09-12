@@ -1531,47 +1531,4 @@ class ADBDevice(ADBShell):
             self.keyevent('ENTER')
 
 
-class ADBExtraDevice(ADBDevice):
-    def __init__(self, aapt: bool = False, minicap: bool = False,
-                 *args, **kwargs):
-        """
-        添加了额外模块的adb
-
-        Args:
-            aapt: Android资源打包工具,可以用于解析apk
-            minicap: Android流式传输实时屏幕捕获数据
-        """
-        super(ADBExtraDevice, self).__init__(*args, **kwargs)
-        if aapt:
-            from adbutils.extra import Aapt
-            self.aapt = Aapt(device=self)
-            self._aapt_flag = True
-        else:
-            self._aapt_flag = False
-
-        if minicap:
-            from adbutils.extra import Rotation
-            self.rotation_watcher = Rotation(device=self)
-            self.rotation_watcher.start()
-
-            from adbutils.extra import Minicap
-            self.minicap = Minicap(device=self, rotation_watcher=self.rotation_watcher)
-            self._minicap_flag = True
-        else:
-            self._minicap_flag = False
-
-    def __getattribute__(self, item):
-        """
-        用于隔离自定义模块未创建时的报错
-
-        Args:
-            item: 当前访问的属性
-        """
-        if item == 'minicap' and not self._minicap_flag:
-            raise AdbExtraModuleNotFount('minicap not create, Call minicap = True at instance time')
-        elif item == 'aapt' and not self._aapt_flag:
-            raise AdbExtraModuleNotFount('aapt not create， Call aapt = True at instance time')
-        return object.__getattribute__(self, item)
-
-
-__all__ = ['ADBClient', 'ADBDevice', 'ADBExtraDevice']
+__all__ = ['ADBClient', 'ADBDevice']

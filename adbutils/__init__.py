@@ -1,5 +1,5 @@
-from adbutils.adb import ADBClient, ADBDevice, ADBExtraDevice
+from adbutils.adb import ADBClient, ADBDevice
 
 
-__all__ = ['ADBDevice', 'ADBClient', 'ADBExtraDevice']
+__all__ = ['ADBDevice', 'ADBClient']
 

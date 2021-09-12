@@ -80,10 +80,7 @@ ADB_INSTALL_FAILED = {
 }
 
 # AAPT
-AAPT_LOCAL_PATH = {
-    'arm': os.path.join(STATICPATH, 'aapt', 'aapt-arm-pie'),
-    'x86': os.path.join(STATICPATH, 'aapt', 'aapt-x86-pie'),
-}
+AAPT_LOCAL_PATH = os.path.join(STATICPATH, 'aapt', '{abi_version}', 'aapt')
 AAPT_REMOTE_PATH = os.path.join(ANDROID_TMP_PATH, 'aapt')
 
 
@@ -100,7 +97,7 @@ MNC_CAP_LOCAL_PATH = ADB_CAP_LOCAL_PATH
 MNC_LOCAL_NAME = 'minicap_{device_id}'
 MNC_LOCAL_PATH = os.path.join(STATICPATH, 'stf_libs', '{abi_version}', 'minicap')
 MNC_SO_LOCAL_PATH = os.path.join(STATICPATH, 'stf_libs', 'minicap-shared', 'aosp', 'libs',
-                                   'android-{sdk_version}', '{abi_version}', 'minicap.so')
+                                 'android-{sdk_version}', '{abi_version}', 'minicap.so')
 
 # minitouch
 MNT_REMOTE_PATH = os.path.join(ANDROID_TMP_PATH, 'minitouch')
