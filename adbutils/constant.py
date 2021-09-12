@@ -83,6 +83,9 @@ ADB_INSTALL_FAILED = {
 AAPT_LOCAL_PATH = os.path.join(STATICPATH, 'aapt', '{abi_version}', 'aapt')
 AAPT_REMOTE_PATH = os.path.join(ANDROID_TMP_PATH, 'aapt')
 
+# AAPT2
+AAPT2_LOCAL_PATH = os.path.join(STATICPATH, 'aapt2', '{abi_version}', 'bin', 'aapt2')
+AAPT2_REMOTE_PATH = os.path.join(ANDROID_TMP_PATH, 'aapt2')
 
 # busyBox
 BUSYBOX_LOCAL_PATH = os.path.join(STATICPATH, 'busybox', 'busybox-arm{}')

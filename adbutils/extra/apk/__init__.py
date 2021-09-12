@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
 from adbutils import ADBDevice
+from adbutils._utils import split_cmd
 from adbutils.constant import (AAPT_LOCAL_PATH, AAPT_REMOTE_PATH, ANDROID_TMP_PATH,
-                               BUSYBOX_REMOTE_PATH, BUSYBOX_LOCAL_PATH)
+                               BUSYBOX_REMOTE_PATH, BUSYBOX_LOCAL_PATH,
+                               AAPT2_LOCAL_PATH, AAPT2_REMOTE_PATH)
 from adbutils.exceptions import AdbBaseError
+from loguru import logger
 
 from typing import Union, Tuple, List, Optional, Match, Dict
 import re
@@ -16,7 +19,7 @@ class Apk(object):
     def __init__(self, device: ADBDevice, packageName: str):
         self.device = device
 
-        self._install_aapt()
+        self._install_aapt2()
         self._install_busyBox()
 
         self.device.check_dir(path=ANDROID_TMP_PATH, name=self.ICON_DIR_NAME, flag=True)
@@ -125,6 +128,16 @@ class Apk(object):
         if info := re.compile(r'application-icon-(\S*):\'(?P<icon>\S+)\'').findall(self.app_info):
             return info[-1][-1]
 
+    def xml_test(self):
+        # TODO: 获取icon
+        # 解析AndroidManifest.xml获取icon的路径
+        # dump resources解析出icon路径对于的resource
+        # dump_xml = self.aapt_shell(['dump xmltree', '/data/app/tv.danmaku.bili-1/base.apk', '--file', self.icon_info])
+        dump_xml = self.aapt_shell(['dump xmltree', '/data/app/jp.co.cygames.umamusume-2/base.apk', '--file', 'AndroidManifest.xml'])
+        print(dump_xml)
+        s = '0x7f0b0000'
+        print(self.aapt_shell(['dump resources', '/data/app/jp.co.cygames.umamusume-2/base.apk', f'|grep -C6 \'{s}\'']))
+
     def get_icon_file(self, local: str) -> None:
         """
         获取icon文件到本地<local>
@@ -136,6 +149,8 @@ class Apk(object):
             None
         """
         if os.path.splitext(self.icon_info)[-1] != '.png':
+            # TODO: xml解析获取icon文件
+            logger.warning(f'{self.icon_info} is \'xml\', 现在没做xml解析')
             return None
 
         save_dir = os.path.join(ANDROID_TMP_PATH, f'{self.ICON_DIR_NAME}/')
@@ -165,6 +180,13 @@ class Apk(object):
             self.device.push(local=aapt_local_path, remote=AAPT_REMOTE_PATH)
             time.sleep(1)
             self.device.shell(['chmod', '755', AAPT_REMOTE_PATH])
+
+    def _install_aapt2(self):
+        if not self.device.check_dir(ANDROID_TMP_PATH, 'aapt2'):
+            aapt2_local_path = AAPT2_LOCAL_PATH.format(abi_version=self.device.abi_version)
+            self.device.push(local=aapt2_local_path, remote=AAPT2_REMOTE_PATH)
+            time.sleep(1)
+            self.device.shell(['chmod', '755', AAPT2_REMOTE_PATH])
 
     def _install_busyBox(self) -> None:
         """
@@ -196,7 +218,11 @@ class Apk(object):
         if not app_path:
             raise AdbBaseError(f"'{packageName}' install path not found")
 
-        return self.device.shell(f'{AAPT_REMOTE_PATH} d badging {app_path}')
+        return self.aapt_shell(f'd badging {app_path}')
+
+    def aapt_shell(self, cmds: Union[list, str]):
+        cmds = [f'{AAPT2_REMOTE_PATH}'] + split_cmd(cmds)
+        return self.device.shell(cmds)
 
     def _get_app_path_list(self, flag_options: Union[None, str, list] = None) -> List[Tuple[str, str]]:
         """
