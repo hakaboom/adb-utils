@@ -15,6 +15,16 @@ from adbutils.extra.performance.fps import Fps
 device = ADBDevice(device_id='emulator-5554')
 fps = Fps(device=device)
 apk = Apk(device=device, packageName=device.foreground_package)
-print(device.get_app_install_path(device.foreground_package))
-print(apk.xml_test())
-# print(device.shell('/data/local/tmp/aapt2 dump xmltree /data/app/tv.danmaku.bili-1/base.apk --file r/81.xml'))
+
+apk._dump_icon_from_androidManifest()
+s = """
+ mipmap/ic_launcher
+      (mdpi) "r/7-m.png"
+      (hdpi) "r/7-q.png"
+      (xhdpi) "r/7-u.png"
+      (xxhdpi) "r/810.png"
+      (xxxhdpi) "r/81b.png"
+      (anydpi-v26) "r/81f.xml"
+"""
+pattern = re.compile(r'\((\S+)\) \"(\S+)\"')
+print(pattern.findall(s))

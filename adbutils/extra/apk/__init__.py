@@ -128,6 +128,10 @@ class Apk(object):
         if info := re.compile(r'application-icon-(\S*):\'(?P<icon>\S+)\'').findall(self.app_info):
             return info[-1][-1]
 
+    @property
+    def install_path(self) -> str:
+        return self.device.get_app_install_path(self.packageName)
+
     def xml_test(self):
         # TODO: 获取icon
         # 解析AndroidManifest.xml获取icon的路径
@@ -135,8 +139,23 @@ class Apk(object):
         # dump_xml = self.aapt_shell(['dump xmltree', '/data/app/tv.danmaku.bili-1/base.apk', '--file', self.icon_info])
         dump_xml = self.aapt_shell(['dump xmltree', '/data/app/jp.co.cygames.umamusume-2/base.apk', '--file', 'AndroidManifest.xml'])
         print(dump_xml)
-        s = '0x7f0b0000'
-        print(self.aapt_shell(['dump resources', '/data/app/jp.co.cygames.umamusume-2/base.apk', f'|grep -C6 \'{s}\'']))
+        s = '0x7f0e0058'
+        print(self.aapt_shell(['dump resources', self.install_path, f'|grep -C6 \'{s}\'']))
+
+    def _dump_icon_from_androidManifest(self):
+        xml = self.aapt_shell(['dump', 'xmltree', self.install_path, '--file', 'AndroidManifest.xml'])
+        pattern = re.compile('E: application.*icon\(\S+\)=@(?P<id>\S+)', re.DOTALL)
+        if m := pattern.search(xml):
+            self._dump_path_from_resources(m.group('id'))
+
+    def _dump_path_from_resources(self, _id: str):
+        resources = self.aapt_shell(['dump resources', self.install_path])
+        # if _id in resources:
+        #     print(resources[resources.index(_id)-100:resources.index(_id)+1000])
+        pattern = re.compile(f'resource {_id}(.+?)resource', re.DOTALL)
+        if m := pattern.search(resources):
+            resource = m.group(1)
+            print(resource)
 
     def get_icon_file(self, local: str) -> None:
         """
@@ -160,7 +179,7 @@ class Apk(object):
 
         # step2: 检查icon_path
         # step2: 解压缩base.apk里的icon文件,保存到save_path下
-        self.device.shell(cmds=[BUSYBOX_REMOTE_PATH, 'unzip', '-oq', self.device.get_app_install_path(self.packageName),
+        self.device.shell(cmds=[BUSYBOX_REMOTE_PATH, 'unzip', '-oq', self.install_path,
                                 f"\"{self.icon_info}\"", '-d', save_path])
         time.sleep(.2)
 
