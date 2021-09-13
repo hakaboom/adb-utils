@@ -25,6 +25,14 @@ s = """
       (xxhdpi) "r/810.png"
       (xxxhdpi) "r/81b.png"
       (anydpi-v26) "r/81f.xml"
+ mipmap/app_icon
+      (ldpi) (file) res/mipmap-ldpi-v4/app_icon.png type=PNG
+      (mdpi) (file) res/mipmap-mdpi-v4/app_icon.png type=PNG
+      (hdpi) (file) res/mipmap-hdpi-v4/app_icon.png type=PNG
+      (xhdpi) (file) res/mipmap-xhdpi-v4/app_icon.png type=PNG
+      (xxhdpi) (file) res/mipmap-xxhdpi-v4/app_icon.png type=PNG
+      (xxxhdpi) (file) res/mipmap-xxxhdpi-v4/app_icon.png type=PNG
+      (anydpi-v26) (file) res/mipmap-anydpi-v26/app_icon.xml type=XML
 """
 pattern = re.compile(r'\((\S+)\) \"(\S+)\"')
 print(pattern.findall(s))
