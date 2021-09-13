@@ -132,30 +132,22 @@ class Apk(object):
     def install_path(self) -> str:
         return self.device.get_app_install_path(self.packageName)
 
-    def xml_test(self):
-        # TODO: 获取icon
-        # 解析AndroidManifest.xml获取icon的路径
-        # dump resources解析出icon路径对于的resource
-        # dump_xml = self.aapt_shell(['dump xmltree', '/data/app/tv.danmaku.bili-1/base.apk', '--file', self.icon_info])
-        dump_xml = self.aapt_shell(['dump xmltree', '/data/app/jp.co.cygames.umamusume-2/base.apk', '--file', 'AndroidManifest.xml'])
-        print(dump_xml)
-        s = '0x7f0e0058'
-        print(self.aapt_shell(['dump resources', self.install_path, f'|grep -C6 \'{s}\'']))
-
     def _dump_icon_from_androidManifest(self):
         xml = self.aapt_shell(['dump', 'xmltree', self.install_path, '--file', 'AndroidManifest.xml'])
         pattern = re.compile('E: application.*icon\(\S+\)=@(?P<id>\S+)', re.DOTALL)
         if m := pattern.search(xml):
-            self._dump_path_from_resources(m.group('id'))
+            return self._dump_path_from_resources(m.group('id'))
 
     def _dump_path_from_resources(self, _id: str):
         resources = self.aapt_shell(['dump resources', self.install_path])
-        # if _id in resources:
-        #     print(resources[resources.index(_id)-100:resources.index(_id)+1000])
         pattern = re.compile(f'resource {_id}(.+?)resource', re.DOTALL)
         if m := pattern.search(resources):
             resource = m.group(1)
-            print(resource)
+            resFileRE = re.compile('\((\S+dpi)\).* [\"\']?(\S+\.png)')
+            if icon_file := resFileRE.findall(resource):
+                return icon_file[-1][-1]
+
+        return None
 
     def get_icon_file(self, local: str) -> None:
         """
@@ -167,24 +159,22 @@ class Apk(object):
         Returns:
             None
         """
-        if os.path.splitext(self.icon_info)[-1] != '.png':
-            # TODO: xml解析获取icon文件
-            logger.warning(f'{self.icon_info} is \'xml\', 现在没做xml解析')
-            return None
+        icon_info = self.icon_info
+        if os.path.splitext(icon_info)[-1] == '.xml':
+            icon_info = self._dump_icon_from_androidManifest()
 
         save_dir = os.path.join(ANDROID_TMP_PATH, f'{self.ICON_DIR_NAME}/')
         save_path = os.path.join(save_dir, self.packageName)
         # step1: 检查保存路径下是否存在包名路径
         self.device.check_dir(save_dir, name=self.packageName, flag=True)
 
-        # step2: 检查icon_path
         # step2: 解压缩base.apk里的icon文件,保存到save_path下
         self.device.shell(cmds=[BUSYBOX_REMOTE_PATH, 'unzip', '-oq', self.install_path,
-                                f"\"{self.icon_info}\"", '-d', save_path])
+                                f"\"{icon_info}\"", '-d', save_path])
         time.sleep(.2)
 
         # step3: 将save_path下的png文件,pull到本地
-        pull_path = os.path.join(f'{save_path}/', self.icon_info)
+        pull_path = os.path.join(f'{save_path}/', icon_info)
         self.device.pull(remote=pull_path, local=local)
 
     def _install_aapt(self) -> None:
@@ -201,7 +191,7 @@ class Apk(object):
             self.device.shell(['chmod', '755', AAPT_REMOTE_PATH])
 
     def _install_aapt2(self):
-        if not self.device.check_dir(ANDROID_TMP_PATH, 'aapt2'):
+        if not self.device.check_file(ANDROID_TMP_PATH, 'aapt2'):
             aapt2_local_path = AAPT2_LOCAL_PATH.format(abi_version=self.device.abi_version)
             self.device.push(local=aapt2_local_path, remote=AAPT2_REMOTE_PATH)
             time.sleep(1)
