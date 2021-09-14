@@ -19,8 +19,7 @@ class Apk(object):
     def __init__(self, device: ADBDevice, packageName: str):
         self.device = device
 
-        self._install_aapt2()
-        self._install_busyBox()
+        self.install()
 
         self.device.check_dir(path=ANDROID_TMP_PATH, name=self.ICON_DIR_NAME, flag=True)
         self.app_info = self._dump_app_info(packageName)
@@ -177,51 +176,6 @@ class Apk(object):
         pull_path = os.path.join(f'{save_path}/', icon_info)
         self.device.pull(remote=pull_path, local=local)
 
-    def _install_aapt(self) -> None:
-        """
-        check if appt installed
-
-        Returns:
-            None
-        """
-        if not self.device.check_file(ANDROID_TMP_PATH, 'aapt'):
-            aapt_local_path = AAPT_LOCAL_PATH.format(abi_version=self.device.abi_version)
-            self.device.push(local=aapt_local_path, remote=AAPT_REMOTE_PATH)
-            time.sleep(1)
-            self.device.shell(['chmod', '755', AAPT_REMOTE_PATH])
-
-    def _install_aapt2(self):
-        if not self.device.check_file(ANDROID_TMP_PATH, 'aapt2'):
-            aapt2_local_path = AAPT2_LOCAL_PATH.format(abi_version=self.device.abi_version)
-            self.device.push(local=aapt2_local_path, remote=AAPT2_REMOTE_PATH)
-            time.sleep(1)
-            self.device.shell(['chmod', '755', AAPT2_REMOTE_PATH])
-
-    def _install_busyBox(self) -> None:
-        """
-        check if busyBox installed
-
-        Returns:
-            None
-        """
-        if not self.device.check_file(ANDROID_TMP_PATH, 'busybox'):
-            if 'v8' in self.device.abi_version:
-                local = BUSYBOX_LOCAL_PATH.format('v8l')
-            elif 'v7r' in self.device.abi_version:
-                local = BUSYBOX_LOCAL_PATH.format('v7r')
-            elif 'v7m' in self.device.abi_version:
-                local = BUSYBOX_LOCAL_PATH.format('v7m')
-            elif 'v7l' in self.device.abi_version:
-                local = BUSYBOX_LOCAL_PATH.format('v7l')
-            elif 'v5' in self.device.abi_version:
-                local = BUSYBOX_LOCAL_PATH.format('v5l')
-            else:
-                local = BUSYBOX_LOCAL_PATH.format('v8l')
-
-            self.device.push(local=local, remote=BUSYBOX_REMOTE_PATH)
-            time.sleep(1)
-            self.device.shell(['chmod', '755', BUSYBOX_REMOTE_PATH])
-
     def _dump_app_info(self, packageName: str) -> str:
         app_path = self.device.get_app_install_path(packageName)
         if not app_path:
@@ -258,3 +212,76 @@ class Apk(object):
                 ret.append(m[0])
 
         return ret
+
+    def _install_aapt(self) -> None:
+        """
+        check if appt installed
+
+        Returns:
+            None
+        """
+        if not self.device.check_file(ANDROID_TMP_PATH, 'aapt'):
+            aapt_local_path = AAPT_LOCAL_PATH.format(abi_version=self.device.abi_version)
+            self.device.push(local=aapt_local_path, remote=AAPT_REMOTE_PATH)
+            time.sleep(1)
+            self.device.shell(['chmod', '755', AAPT_REMOTE_PATH])
+
+    def _install_aapt2(self) -> None:
+        """
+        check if appt2 installed
+
+        Returns:
+            None
+        """
+        if not self.device.check_file(ANDROID_TMP_PATH, 'aapt2'):
+            aapt2_local_path = AAPT2_LOCAL_PATH.format(abi_version=self.device.abi_version)
+            self.device.push(local=aapt2_local_path, remote=AAPT2_REMOTE_PATH)
+            self.device.shell(['chmod', '755', AAPT2_REMOTE_PATH])
+
+    def _install_busyBox(self) -> None:
+        """
+        check if busyBox installed
+
+        Returns:
+            None
+        """
+        if not self.device.check_file(ANDROID_TMP_PATH, 'busybox'):
+            if 'v8' in self.device.abi_version:
+                local = BUSYBOX_LOCAL_PATH.format('v8l')
+            elif 'v7r' in self.device.abi_version:
+                local = BUSYBOX_LOCAL_PATH.format('v7r')
+            elif 'v7m' in self.device.abi_version:
+                local = BUSYBOX_LOCAL_PATH.format('v7m')
+            elif 'v7l' in self.device.abi_version:
+                local = BUSYBOX_LOCAL_PATH.format('v7l')
+            elif 'v5' in self.device.abi_version:
+                local = BUSYBOX_LOCAL_PATH.format('v5l')
+            else:
+                local = BUSYBOX_LOCAL_PATH.format('v8l')
+
+            self.device.push(local=local, remote=BUSYBOX_REMOTE_PATH)
+            self.device.shell(['chmod', '755', BUSYBOX_REMOTE_PATH])
+
+    def install(self) -> None:
+        """
+        install aapt2/busyBox
+
+        Returns:
+            None
+        """
+        self._install_aapt2()
+        self._install_busyBox()
+
+    def uninstall(self) -> None:
+        """
+        uninstall busyBox,aapt2
+
+        Returns:
+            None
+        """
+        try:
+            self.device.raw_shell(f'rm -r {BUSYBOX_REMOTE_PATH}')
+            self.device.raw_shell(f'rm -f {AAPT2_REMOTE_PATH}')
+            self.device.raw_shell(f'rm -f {AAPT_REMOTE_PATH}')
+        except AdbBaseError as err:
+            logger.warning(err)
