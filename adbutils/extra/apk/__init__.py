@@ -69,7 +69,7 @@ class Apk(object):
         Returns:
             版本名
         """
-        if info := re.compile(r'versionName=\'(?P<versionName>[ \S]+)\' ').search(self.app_info):
+        if info := re.compile(r'versionName=\'(?P<versionName>[ \S]+)\' platformBuildVersionName').search(self.app_info):
             return info.group('versionName')
 
     @property
