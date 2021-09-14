@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='adb-utils',
-    version='1.0.13',
+    version='1.0.14',
     author='hakaboom',
     author_email='1534225986@qq.com',
     license='Apache License 2.0',

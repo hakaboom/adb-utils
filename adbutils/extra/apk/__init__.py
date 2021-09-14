@@ -129,6 +129,12 @@ class Apk(object):
 
     @property
     def install_path(self) -> str:
+        """
+        获取apk安装路径
+
+        Returns:
+            在设备上的路径
+        """
         return self.device.get_app_install_path(self.packageName)
 
     def _dump_icon_from_androidManifest(self):
