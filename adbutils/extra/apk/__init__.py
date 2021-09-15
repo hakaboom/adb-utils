@@ -58,7 +58,7 @@ class Apk(object):
         Returns:
             版本号
         """
-        if info := re.compile(r'versionCode=\'(?P<versionCode>\S*)\' ').search(self.app_info):
+        if info := re.compile(r'versionCode=\'(?P<versionCode>\S*)\'').search(self.app_info):
             return info.group('versionCode')
 
     @property
@@ -69,7 +69,7 @@ class Apk(object):
         Returns:
             版本名
         """
-        if info := re.compile(r'versionName=\'(?P<versionName>[ \S]+)\' platformBuildVersionName').search(self.app_info):
+        if info := re.compile(r'versionName=\'(?P<versionName>.+?)\'').search(self.app_info):
             return info.group('versionName')
 
     @property
@@ -113,7 +113,7 @@ class Apk(object):
         Returns:
             构建平台版本名
         """
-        if info := re.compile(r'platformBuildVersionName=\'(?P<platformBuildVersionName>\S*)\'').search(self.app_info):
+        if info := re.compile(r'platformBuildVersionName=\'(?P<platformBuildVersionName>.+?)\'').search(self.app_info):
             return info.group('platformBuildVersionName')
 
     @property
