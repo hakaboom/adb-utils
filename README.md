@@ -17,7 +17,7 @@ pip3 install adb-utils
 - [ ] 基于PYQT的设备管理工具
 
 ## 备注
-由于工作内容,对于低版本android不打算做适配
+对于低版本android不打算做适配
 
 
 ## 函数
