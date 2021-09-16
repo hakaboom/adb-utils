@@ -1,15 +1,18 @@
+import queue
 import random
 import subprocess
 import re
 import socket
 import os
+import threading
 import time
 import warnings
 # TODO: pm install/uninstall
 import numpy as np
 from baseImage import Rect, Point
 
-from adbutils._utils import (get_adb_exe, split_cmd, _popen_kwargs, get_std_encoding, check_file)
+from adbutils._utils import (get_adb_exe, split_cmd, _popen_kwargs, get_std_encoding, check_file,
+                             NonBlockingStreamReader, reg_cleanup)
 from adbutils.constant import (ANDROID_ADB_SERVER_HOST, ANDROID_ADB_SERVER_PORT, ADB_CAP_RAW_REMOTE_PATH,
                                ADB_CAP_RAW_LOCAL_PATH, IP_PATTERN, ADB_DEFAULT_KEYBOARD, ANDROID_TMP_PATH,
                                ADB_KEYBOARD_APK_PATH)
@@ -18,7 +21,7 @@ from adbutils.exceptions import (AdbError, AdbShellError, AdbBaseError, AdbTimeo
 from adbutils._wraps import retries
 from loguru import logger
 
-from typing import Union, List, Optional, Tuple, Dict, Match, Iterator, Final
+from typing import Union, List, Optional, Tuple, Dict, Match, Iterator, Final, Generator, Any
 
 
 class ADBClient(object):
@@ -257,6 +260,34 @@ class ADBClient(object):
             None
         """
         self.cmd(['pull', remote, local], decode=False)
+
+    def ex_push(self, local: str, remote: str) -> Generator[Union[str, bool], Any, None]:
+        """
+        特殊push方法, 返回一个生成器, 通过next获取push进度,push完成后返回True
+
+        Args:
+            local: 本地的路径
+            remote: 设备上的路径
+
+        Returns:
+            生成器
+        """
+        # TODO: push方法可能存在异常
+        proc = self.start_cmd(cmds=['push', local, remote])
+
+        nbsp = NonBlockingStreamReader(proc.stdout)
+        progressRE = re.compile(r'\[\s*(\d+)%]')
+        while True:
+            line: bytes = nbsp.readline(timeout=1)
+            if line is None:
+                raise AdbBaseError(proc.stderr)
+            elif b'file pushed' in line:
+                break
+            line: str = line.decode(get_std_encoding(line))
+            yield progressRE.search(line).group(1)
+
+        yield True
+        reg_cleanup(proc.kill)
 
     def install(self, local: str, install_options: Union[str, list, None] = None) -> bool:
         """
