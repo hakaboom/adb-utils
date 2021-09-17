@@ -1109,6 +1109,21 @@ class ADBShell(ADBClient):
         """
         self.shell(cmds=['mkdir', '-m 755', os.path.join(path, name)])
 
+    def get_file_size(self, remote: str) -> int:
+        """
+        command 'adb shell du -k -s <remote>' 获取remote路径下文件大小
+
+        Args:
+            remote: 文件路径
+
+        Returns:
+            文件大小(KB)
+        """
+        ret = self.shell(cmds=['du', '-k', '-s', remote])
+        pattern = re.compile(rf'(\d+)\s*{remote}')
+        if m := pattern.findall(ret):
+            return int(m[-1])
+
     def getMaxXY(self) -> Tuple[int, int]:
         """
         获取屏幕可点击的最大长宽距离
