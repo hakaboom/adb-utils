@@ -13,3 +13,5 @@ from adbutils.extra.apk import Apk
 from adbutils.extra.performance.fps import Fps
 
 device = ADBDevice(device_id='emulator-5554')
+device.install(local='test.apk')
+

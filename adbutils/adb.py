@@ -248,6 +248,33 @@ class ADBClient(object):
             raise RuntimeError(f"file: {local} does not exists")
         self.cmd(['push', local, remote], decode=False)
 
+    def push_with_progress(self, local: str, remote: str) -> Generator[Union[str, bool], Any, None]:
+        """
+        特殊push方法, 返回一个生成器, 通过next获取push进度,push完成后返回True
+
+        Args:
+            local: 本地的路径
+            remote: 设备上的路径
+
+        Returns:
+            生成器
+        """
+        proc = self.start_cmd(cmds=['push', local, remote])
+
+        nbsp = NonBlockingStreamReader(proc.stdout)
+        progressRE = re.compile(r'\[\s*(\d+)%]')
+        while True:
+            line: bytes = nbsp.readline(timeout=1)
+            if line is None:
+                raise AdbBaseError(proc.stderr)
+            elif b'file pushed' in line:
+                break
+            line: str = line.decode(get_std_encoding(line))
+            yield progressRE.search(line).group(1)
+
+        yield True
+        reg_cleanup(proc.kill)
+
     def pull(self, local: str, remote: str) -> None:
         """
         command 'adb pull <remote> <local>
@@ -261,9 +288,9 @@ class ADBClient(object):
         """
         self.cmd(['pull', remote, local], decode=False)
 
-    def ex_push(self, local: str, remote: str) -> Generator[Union[str, bool], Any, None]:
+    def pull_with_progress(self, local: str, remote: str) -> Generator[Union[str, bool], Any, None]:
         """
-        特殊push方法, 返回一个生成器, 通过next获取push进度,push完成后返回True
+        特殊pull方法, 返回一个生成器, 通过next获取pull进度,pull完成后返回True
 
         Args:
             local: 本地的路径
@@ -272,8 +299,7 @@ class ADBClient(object):
         Returns:
             生成器
         """
-        # TODO: push方法可能存在异常
-        proc = self.start_cmd(cmds=['push', local, remote])
+        proc = self.start_cmd(cmds=['pull', remote, local])
 
         nbsp = NonBlockingStreamReader(proc.stdout)
         progressRE = re.compile(r'\[\s*(\d+)%]')
@@ -281,7 +307,7 @@ class ADBClient(object):
             line: bytes = nbsp.readline(timeout=1)
             if line is None:
                 raise AdbBaseError(proc.stderr)
-            elif b'file pushed' in line:
+            elif b'file pulled' in line:
                 break
             line: str = line.decode(get_std_encoding(line))
             yield progressRE.search(line).group(1)
@@ -312,7 +338,7 @@ class ADBClient(object):
         if isinstance(install_options, str):
             cmds.append(install_options)
         elif isinstance(install_options, list):
-            cmds = cmds + install_options
+            cmds += install_options
 
         cmds = cmds + [local]
         proc = self.start_cmd(cmds)
@@ -1467,6 +1493,76 @@ class ADBDevice(ADBShell):
             None
         """
         self.shell(['pm', 'clear', package])
+
+    def install(self, local: str, install_options: Union[str, list, None] = None) -> bool:
+        """
+        push apk 文件到 /data/local/tmp;
+        调用 pm install 安装;
+        删除 /data/local/tmp 下的对应 apk 文件
+
+        Args:
+            local: apk文件路径
+            install_options: 可指定参数
+                    "-r",  # 重新安装现有应用，并保留其数据。
+                    "-t",  # 允许安装测试 APK。
+                    "-g",  # 授予应用清单中列出的所有权限。
+                    "-d",  # 允许APK降级覆盖安装
+                    "-l",  # 将应用安装到保护目录/mnt/asec
+                    "-s",  # 将应用安装到sdcard
+        Raises:
+            AdbInstallError: 安装失败
+            AdbError: 安装失败
+        Returns:
+            安装成功返回True
+        """
+        apk_name = os.path.split(local)[-1]
+        remote = os.path.join(ANDROID_TMP_PATH, apk_name)
+        self.push(local=local, remote=remote)
+        try:
+            flag = self.pm_install(remote=remote, install_options=install_options)
+            self.raw_shell(f'rm -r {remote}')
+            return flag
+        except AdbBaseError as err:
+            raise err
+
+    def pm_install(self, remote: str, install_options: Union[str, list, None] = None) -> bool:
+        """
+        command 'adb shell pm install <local>'
+
+        Args:
+            remote: apk文件路径
+            install_options: 可指定参数
+                    "-r",  # 重新安装现有应用，并保留其数据。
+                    "-t",  # 允许安装测试 APK。
+                    "-g",  # 授予应用清单中列出的所有权限。
+                    "-d",  # 允许APK降级覆盖安装
+                    "-l",  # 将应用安装到保护目录/mnt/asec
+                    "-s",  # 将应用安装到sdcard
+        Raises:
+            AdbInstallError: 安装失败
+            AdbError: 安装失败
+        Returns:
+            安装成功返回True
+        """
+        cmds = ['pm', 'install']
+        if isinstance(install_options, str):
+            cmds.append(install_options)
+        elif isinstance(install_options, list):
+            cmds += install_options
+
+        cmds = cmds + [remote]
+        proc = self.start_shell(cmds)
+        stdout, stderr = proc.communicate()
+
+        stdout = stdout.decode(get_std_encoding(stdout))
+        stderr = stderr.decode(get_std_encoding(stdout))
+
+        if proc.returncode == 0:
+            return True
+        elif err := re.compile(r"Failure \[(.+):.+\]").search(stderr):
+            raise AdbInstallError(err.group(1))
+        else:
+            raise AdbError(stdout, stderr)
 
     def tap(self, point: Union[Tuple[int, int], Point]):
         """
