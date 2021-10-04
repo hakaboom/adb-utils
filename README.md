@@ -10,7 +10,7 @@
 ## Installation
 pip3 install adb-utils
 
-## TODO (9月计划--咕到10月,目前在进行pyqt的二次开发)
+## TODO
 - [ ] minicap集成
 - [ ] minitouch集成
 - [ ] 设备性能数据可视化
