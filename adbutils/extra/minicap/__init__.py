@@ -218,7 +218,7 @@ class Minicap(object):
 
 if __name__ == '__main__':
     import cv2
-    from baseImage import IMAGE
+    from baseImage import Image
 
     from adbutils import ADBDevice
     from adbutils.extra.minicap import Minicap
@@ -229,7 +229,7 @@ if __name__ == '__main__':
 
     while True:
         if img := minicap.get_frame():
-            cv2.imshow('test', IMAGE(img).imread())
+            cv2.imshow('test', Image(img).imread())
 
         if cv2.waitKey(25) & 0xFF == ord('q'):
             cv2.destroyAllWindows()

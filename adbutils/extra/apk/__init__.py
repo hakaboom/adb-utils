@@ -21,19 +21,9 @@ class Apk(object):
 
         self.install()
 
+        self.packageName = packageName
         self.device.check_dir(path=ANDROID_TMP_PATH, name=self.ICON_DIR_NAME, flag=True)
         self.app_info = self._dump_app_info(packageName)
-
-    @property
-    def packageName(self) -> str:
-        """
-        解析获取apk包名
-
-        Returns:
-            包名
-        """
-        if info := re.compile(r'package: name=\'(?P<package_name>\S*)\' ').search(self.app_info):
-            return info.group('package_name')
 
     @property
     def name(self) -> str:
@@ -135,7 +125,10 @@ class Apk(object):
         Returns:
             在设备上的路径
         """
-        return self.device.get_app_install_path(self.packageName)
+        if not hasattr(self, '_install_path'):
+            setattr(self, '_install_path', self.device.get_app_install_path(self.packageName))
+
+        return getattr(self, '_install_path')
 
     def _dump_icon_from_androidManifest(self):
         xml = self.aapt_shell(['dump', 'xmltree', self.install_path, '--file', 'AndroidManifest.xml'])
@@ -183,11 +176,10 @@ class Apk(object):
         self.device.pull(remote=pull_path, local=local)
 
     def _dump_app_info(self, packageName: str) -> str:
-        app_path = self.device.get_app_install_path(packageName)
-        if not app_path:
+        if not self.install_path:
             raise AdbBaseError(f"'{packageName}' install path not found")
 
-        return self.aapt_shell(f'd badging {app_path}')
+        return self.aapt_shell(f'd badging {self.install_path}')
 
     def aapt_shell(self, cmds: Union[list, str]):
         cmds = [f'{AAPT2_REMOTE_PATH}'] + split_cmd(cmds)

@@ -7,7 +7,6 @@ import os
 import threading
 import time
 import warnings
-# TODO: pm install/uninstall
 import numpy as np
 from baseImage import Rect, Point
 
