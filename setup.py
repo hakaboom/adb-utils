@@ -18,7 +18,7 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     install_requires=["loguru>=0.5.3",
-                      "baseImage>=1.1.0"],
+                      "baseImage==1.1.1"],
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: Apache Software License",
