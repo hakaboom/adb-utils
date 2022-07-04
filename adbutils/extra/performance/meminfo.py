@@ -202,19 +202,27 @@ class Meminfo(object):
                              r'.*Objects(.*)', re.DOTALL)
         return m if (m := pattern.search(meminfo)) else None
 
-    def _get_app_meminfo(self, package: Union[str, int]):
+    def _get_app_meminfo(self, packageName: Union[str, int]):
         """
         'adb shell dumpsys meminfo <packageName|pid>' 获取指定包或进程号的内存信息
 
         Raises:
             AdbProcessNotFound: 未找到对应进程时弹出异常
         Args:
-            package: 包名或pid进程号
+            packageName: 包名或pid进程号
 
         Returns:
             内存信息
         """
-        if 'No process found for:' in (ret := self.device.shell(['dumpsys', 'meminfo', package])):
+        if isinstance(packageName, int):
+            arg = packageName
+        else:
+            arg = self.device.get_pid_by_name(packageName=packageName)
+            if not arg:
+                raise AdbProcessNotFound(f"'{packageName}' not found")
+            arg = str(arg[0][0])
+
+        if 'No process found for:' in (ret := self.device.shell(['dumpsys', 'meminfo', arg])):
             raise AdbProcessNotFound(ret.strip())
         else:
             return ret
