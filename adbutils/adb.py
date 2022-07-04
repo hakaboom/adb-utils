@@ -1435,10 +1435,11 @@ class ADBDevice(ADBShell):
         # read size
         img_data = np.fromfile(raw_local_path, dtype=np.uint16)
         width, height = img_data[2], img_data[0]
+        _data = img_data
         # read raw
         _line = 4  # 色彩通道数
         img_data = np.fromfile(raw_local_path, dtype=np.uint8)
-        img_data = img_data[slice(_line * 4, len(img_data))]
+        img_data = img_data[slice(_line * 3, len(img_data))]
         # 范围截取
         img_data = img_data.reshape(width, height, _line)
         width, height = img_data.shape[1::-1]
