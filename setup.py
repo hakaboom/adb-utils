@@ -7,7 +7,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name='adb-utils',
-    version='1.0.16',
+    version='1.0.17',
     author='hakaboom',
     author_email='1534225986@qq.com',
     license='Apache License 2.0',
